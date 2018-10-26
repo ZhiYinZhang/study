@@ -45,4 +45,4 @@ if __name__=="__main__":
     # cli.delete("DPT/dataset/model01_train.parquet")
 
 
-    cli.upload(hdfs_path= 'DPT/dataset',local_path='E:\pythonProject\DPT/files\dataset/model02_train.parquet')
+    cli.upload(hdfs_path= 'DPT/dataset',local_path='E:\pythonProject\dataset/model06_test.parquet',overwrite=True)

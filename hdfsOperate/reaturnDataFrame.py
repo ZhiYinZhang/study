@@ -25,4 +25,10 @@ def readHDFS(filePath):
               df = pd.read_csv(fs)
     return df
 def writeHDFS(filePath):
-    pass
+           pass
+if  __name__=="__main__":
+    d = {"evaluate": {'areaUnderROC': 0.7647349880387647, 'areaUnderPR': 0.7156326647102125}}
+    r = d['evaluate']
+    print(r.keys().__str__()[1:-1])
+    print(r.values().__str__()[1:-1])
+

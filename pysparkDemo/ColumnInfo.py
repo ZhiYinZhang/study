@@ -13,14 +13,15 @@ def  readFile():
 
     spark.sparkContext.setLogLevel("WARN")
     df_in:DataFrame=spark.read \
-         .format("json") \
-         .option("path","e:/pythonProject/test.json") \
+         .format("parquet") \
+         .option("path","e:/pythonProject/dataset/model05_train.parquet") \
          .option("inferSchema","true") \
          .load()
-    path="e:/pythonProject/GBDT_model_2_Output_1"
-    print(df_in.dtypes)
-    pd_df=df_in.toPandas()
-    pd_df.to_json()
+    path="e:/pythonProject/dataset"
+
+    df_in.show(truncate=False)
+    # print(df_in.dtypes)
+    # pd_df=df_in.toPandas()
     # pd_df.to_json(path_or_buf=path,orient="records",lines=True)
     # df_in.write.json("e:/pythonProject/GBDT_model_2_Output_1")
 
@@ -32,5 +33,5 @@ def file_type():
     df=pd.read_json(path_or_buf=path)
 
 if __name__=="__main__":
-    file_type()
-    # readFile()
+    # file_type()
+    readFile()
