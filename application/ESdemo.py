@@ -82,7 +82,7 @@ def kafka2ES(esClient, kafkaClient, param:dict,flag:bool):
             # print(f"当前actions有{len(actions)}条数据，batch为{batch}")
             if len(actions) == param['batch']:
                 print(f"开始写入ES---{index}---{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                helpers.bulk(esClient,actions)
+                # helpers.bulk(esClient,actions)
                 del(actions[:])
                 print(f"写入ES完成---{index}---{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -136,13 +136,14 @@ def createIndex(param:dict,esClient:Elasticsearch,last_time):
     new_index = '%s_%s' % (topic, str_time)
 
     threshold = param['interval']*date_map[param['unit']]
+
+    print(f"now:{now_time.timestamp()},last:{last_time},threshold:{threshold}")
     if now_time.timestamp() - last_time >= threshold:#是否超过阈值
-
-
+        last_time = now_time.timestamp()
         # 设置index的mapping，定义ES解析的日期格式   不存在就创建
         if not esClient.indices.exists(index=new_index):
             #创建新索引
-            esClient.indices.create(index=new_index,body=body)
+            # esClient.indices.create(index=new_index,body=body)
             print(f"创建ES新index：{new_index}")
             #删除过期索引
             del_expire_index(topic=topic,esClient=esClient)
@@ -232,7 +233,8 @@ def open_thread(param, topics):
         print('error: kafka topic must end with "-log"')
 
 def parse_param(param:dict):
-    print(param)
+    for i in param.keys():
+        print(i,type(param[i]))
 
 if __name__=="__main__":
     metadata = []
