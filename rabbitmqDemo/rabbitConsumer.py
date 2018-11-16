@@ -3,6 +3,7 @@
 # from lib.utils import parser
 import json
 import os
+import time
 import pika
 
 user="cloudai"
@@ -10,24 +11,27 @@ passwd="cloudai"
 host="139.199.161.144"
 port=5672
 virtual_host="cloudai"
-# exchange="pub_data_clean"
-# queue_name='pub_data_clean'
+exchange="pub_data_clean"
+queue_name='pub_data_clean'
 # exchange="sub_clean_result"
 # queue_name="sub_clean_result"
-# route_key='data_clean'
-exchange = "data_result"
-queue_name = "data_result"
-route_key = "data_result"
+route_key='data_clean'
+# exchange = "data_result"
+# queue_name = "data_result"
+# route_key = "data_result"
 
 
 # 收到消息后的回调函数
 # TODO 更改消费模式，消费任务后返回ack，确保消息不丢失
 def callback(ch, method, properties, body):
-    s=str(body)
+        current_time = time.time()
+        global before_time
+        print(f'before_time:{before_time},current_time:{current_time}')
+        diff = current_time-before_time
+        if diff >=3:
+            before_time=current_time
+            print(f"delete-----before_time:{before_time},current_time:{current_time}")
 
-    d=json.loads(body)
-    # l=d["data"]["2"]
-    print(d)
 
 
 def consume():
@@ -71,4 +75,5 @@ def consume():
 
 
 if __name__ == '__main__':
+    before_time=time.time()
     consume()

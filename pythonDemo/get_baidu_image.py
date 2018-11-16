@@ -7,6 +7,7 @@ import re
 from urllib import parse
 import time
 import os
+import uuid
 """
 爬取百度图片  瀑布流形式的页面
 
@@ -47,9 +48,13 @@ def download_image(urls,path):
     i=0
     for url in urls:
        response = requests.get(url)
-       i+=1
-       with open(file=f"{path}/{i}.jpg",mode='wb') as file:
-           file.write(response.content)
+       if response.status_code()==200:
+           u = uuid.uuid1()
+           name = u.__str__().replace('-','')
+           response = requests.get(url)
+           i+=1
+           with open(file=f"{path}/{name}.jpg",mode='wb') as file:
+               file.write(response.content)
     print(f"下载完成")
 
 

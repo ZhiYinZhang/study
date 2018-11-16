@@ -30,10 +30,11 @@ dataset = spark.createDataFrame(
 
 assembler=VectorAssembler(inputCols=["hour","mobile","userFeatures"],
                 outputCol="features")
-output=assembler.transform(dataset)
+output:DataFrame = assembler.transform(dataset)
 output.show(10)
 
 output.printSchema()
 
-output.write.format("json").save("E:\\test\\dpt\\vector")
+output.write.format("json").save("E:\\test\\dpt\\vector",mode="overwrite")
+
 spark.stop()

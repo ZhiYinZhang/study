@@ -1,24 +1,31 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 import pandas as pd
-
+from pandas import DataFrame
 import random
 import numpy as np
 import json
 from hdfs import client
 from rabbitmqDemo import rabbitProducer as rp
 import os
-# cli = client.InsecureClient(url="http://entrobus11:50070",user="zhangzy",root='/user/zhangzy')
-#
-# with cli.read('DPT/dataset/model01_train.parquet') as file:
-#     df = pd.read_parquet(file,engine="fastparquet")
-pd.set_option("display.max_columns",10)
-df_pd = pd.read_csv('e://pythonProject/dataset/model06_train.csv')
-# df_pd = df_pd.drop(columns=['Unnamed: 0'])
+cli = client.InsecureClient(url="http://entrobus11:50070",user="zhangzy",root='/user/zhangzy')
 
+#读取hdfs json文件
+with cli.read('test3.json') as reader:
+    # df:DataFrame = pd.read_json(reader)
+    d = json.load(reader)
+print(d)
+# df['timestamp']= df['timestamp'].astype(str)
+# print(df[:])
 
-df_pd = df_pd.fillna(0)
+#读取本地文件
+# with open(file="e://pythonProject//DPT//files//model01.json",mode='r') as file:
+#     d = json.load(fp=file)
+#写hdfs
+# with cli.write(hdfs_path='test3.json',overwrite=True,encoding='utf-8') as writer:
+#     json.dump(d,writer)
 
-df_pd.to_csv('e://pythonProject/dataset/model06_train1.csv',index=False)
-# print(df_pd.columns)
-# df_pd.to_csv('e://pythonProject/dataset/model06_train.csv',index=False)
+# with cli.write('test3.json',overwrite=True,encoding='utf-8') as writer:
+#     json.dump(df.to_dict(orient='record'),writer)
+
+# with cli.read('test3.json',)

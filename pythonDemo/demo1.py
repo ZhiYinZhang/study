@@ -3,6 +3,7 @@
 # datetime:2018/10/18 14:10
 import time
 import threading
+import os
 def demo():
     for i in range(10):
         print(i)
@@ -21,8 +22,9 @@ class myThread(threading.Thread):
 
 if __name__=="__main__":
 
-    th = myThread('test')
-    print(type(th))
-    th.start()
-    th.join(5)
-    print('退出')
+    # th = myThread('test')
+    # print(type(th))
+    # th.start()
+    # th.join(5)
+    # print('退出')
+    print(os.path.abspath(__file__))
