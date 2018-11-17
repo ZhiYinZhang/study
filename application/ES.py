@@ -49,13 +49,13 @@ def kafka2ES(esClient, kafkaClient, topic,mythread):
     consumer = kafkaClient.topics[topic].get_simple_consumer()
     # 切割topic ‘appName-log’ 获取appName
     app=re.split(r'-log', topic)[0]
-    # 获取消费的消息
+    # 获取消费的消息   不是标准的json格式，当做string
     parse_right_actions=[]
     parse_error_actions=[]
     for message in consumer:
         #判断线程退出标志
         if mythread.flag:
-            print('%s')
+            print('terminate {topic}')
             sys.exit()
 
         #创建ES的index
@@ -66,12 +66,12 @@ def kafka2ES(esClient, kafkaClient, topic,mythread):
             body = eval(log)
             action={'_op_type':'index','_index':index,'_type':'log','_source':body}
             parse_right_actions.append(action)
+            #每500条写一次
+            if len(parse_right_actions) == 500:
 
-            if len(parse_right_actions)==500:
-                print('开始写1')
                 helpers.bulk(esClient,parse_right_actions)
                 del(parse_right_actions[:])
-                print('写入完成1')
+
         except:#解析错误
         #      try:
                  # print('解析错误--%s'%log)
@@ -160,9 +160,9 @@ def delete(topic,topics):
         del(topics[topic])
         #保存到checkpoint文件
         writeCheckpoint(topics.keys())
-        print('delete success!')
+        print(f'delete {topic} success!')
     else:
-        print('error: %s not exists'%topic)
+        print(f'error: {topic} not exists')
 
 
 def query(topics):
@@ -209,8 +209,8 @@ def open_thread(topic, topics,number):
 # 连接kafka
 kafka=pykafka.KafkaClient("10.18.0.15:9193,10.18.0.19:9193")
 # 连接ES
-# es = Elasticsearch(hosts='http://119.29.165.154', port=9200)
-es = Elasticsearch(hosts='http://10.18.0.19', port=9200,http_auth=('elastic','elastic'))
+es = Elasticsearch(hosts='http://119.29.165.154', port=9200)
+
 #存储所有消费的topic及对应的线程对象的字典
 topics = {}
 
@@ -223,13 +223,13 @@ for topic in readCheckpoint():
 
 
 #从管理topic(app)中获取命令   每个应用开启一个线程去消费
-consumer=kafka.topics['app'].get_simple_consumer()
+consumer = kafka.topics['app'].get_simple_consumer()
 for messages in consumer:
-    message=messages.value
+    message = messages.value
     if re.search(r'.+(-log_delete)',message):#delete
-        topic=message.split('_')[0]
+        topic = message.split('_')[0]
         delete(topic=topic,topics=topics)
-    elif message=='--list':#query
+    elif message == '--list':#query
         query(topics)
     else:#add
         open_thread(topic=message,topics=topics)

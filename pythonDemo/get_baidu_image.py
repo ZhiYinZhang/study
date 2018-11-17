@@ -49,14 +49,13 @@ def download_image(urls,path):
     for url in urls:
 
        response = requests.get(url)
-       if response.status_code==200:
-           # time.sleep(1)
-           i+=1
+       if response.status_code()==200:
            u = uuid.uuid1()
-           image_name = u.__str__().replace('-','')
-           with open(file=f"{path}/{image_name}.jpg",mode='wb') as file:
+           name = u.__str__().replace('-','')
+           response = requests.get(url)
+           i+=1
+           with open(file=f"{path}/{name}.jpg",mode='wb') as file:
                file.write(response.content)
-               # print(response.content)
     print(f"下载完成")
     return i
 
