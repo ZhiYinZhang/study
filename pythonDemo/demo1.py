@@ -1,28 +1,27 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 # datetime:2018/10/18 14:10
-import time
-import threading
-def demo():
-    for i in range(10):
-        print(i)
-        time.sleep(1)
+from pyspark.sql import SparkSession,Row
 
-class myThread(threading.Thread):
-    def __init__(self,threadName):
-        threading.Thread.__init__(self)
-        self.threadName = threadName
-    def run(self):
-        print('start',self.threadName)
-        for i in range(10):
-            print(i)
-            time.sleep(1)
-        print('stop',self.threadName)
+def ope(r:Row):
+     global accumulator
+     row = Row(accumulator)
+     accumulator+=1
+     print(accumulator )
+     return row
+spark = SparkSession.builder\
+                    .appName("test")\
+                    .master("local[3]")\
+                    .getOrCreate()
+sc  = spark.sparkContext
+accumulator = sc.accumulator(0)
+df = spark.read\
+     .option("header",'true')\
+     .option("inferSchema",'true')\
+     .csv("e://javacode//dataset//model06_train.csv")
 
-if __name__=="__main__":
+df.printSchema()
+r = df.rdd
+r.map(lambda x:print(x))
 
-    th = myThread('test')
-    print(type(th))
-    th.start()
-    th.join(5)
-    print('退出')
+print(type(r))

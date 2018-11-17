@@ -7,6 +7,7 @@ import re
 from urllib import parse
 import time
 import os
+import uuid
 """
 爬取百度图片  瀑布流形式的页面
 
@@ -46,25 +47,39 @@ def download_image(urls,path):
     print(f"开始下载图片，一共{len(urls)}张")
     i=0
     for url in urls:
+
        response = requests.get(url)
-       i+=1
-       with open(file=f"{path}/{i}.jpg",mode='wb') as file:
-           file.write(response.content)
+       if response.status_code==200:
+           # time.sleep(1)
+           i+=1
+           u = uuid.uuid1()
+           image_name = u.__str__().replace('-','')
+           with open(file=f"{path}/{image_name}.jpg",mode='wb') as file:
+               file.write(response.content)
+               # print(response.content)
     print(f"下载完成")
+    return i
 
 
 if __name__=="__main__":
+    keywords=["鼠","鹿","貂","猴","貘","树懒斑马","狗","狐","熊","象","豹子","麝牛","狮子小熊猫","疣猪","羚羊","驯鹿","考拉","犀牛","猞猁","穿山甲长颈鹿","熊猫","食蚁兽","猩猩","海牛","水獭","灵猫","海豚海象","鸭嘴兽","刺猬","北极狐","无尾熊","北极熊","袋鼠","犰狳河马","海豹","鲸鱼","鼬"]
+    for keyword in keywords:
+        print(f"-------------------------------------开始下载{keyword}---------------------------------------")
+        #编码
+        keyword_url=parse.quote(keyword)
 
-    keyword="美女"
-    #编码
-    keyword_url=parse.quote(keyword)
+        file_path = "E:\\javacode\\image\\"
+        if not os.path.exists(path=file_path+keyword):
+            os.makedirs(file_path+keyword)
+        total=1
+        #共下了多少张
+        for i in range(30,600,30):
+            print(f"pn {i}")
+            url = f"https://image.baidu.com/search/acjson?tn=resultjson_com&ipn=rj&ct=201326592&is=&fp=result&queryWord={keyword_url}&cl=2&lm=-1&ie=utf-8&oe=utf-8&adpicid=&st=-1&z=&ic=0&word={keyword_url}&s=&se=&tab=&width=&height=&face=0&istype=2&qc=&nc=1&fr=&expermode=&pn={i}&rn=30&gsm=3c&1540608319195="
+            image_urls =  get_image_url(url)
 
-    file_path = "E:\\test\\image\\"
-    if not os.path.exists(path=file_path+keyword):
-        os.makedirs(file_path+keyword)
-
-    for i in range(30,100,30):
-        url = f"http://image.baidu.com/search/acjson?tn=resultjson_com&ipn=rj&ct=201326592&is=&fp=result&queryWord={keyword_url}&cl=2&lm=-1&ie=utf-8&oe=utf-8&adpicid=&st=&z=&ic=&word={keyword_url}&s=&se=&tab=&width=&height=&face=&istype=&qc=&nc=&fr=&expermode=&pn={i}&rn=30&gsm=78&1540543731419="
-        image_urls =  get_image_url(url)
-
-        download_image(urls=image_urls,path=file_path+keyword)
+            num = download_image(urls=image_urls,path=file_path+keyword)
+            total+=num
+            print(f"--------------到目前为止下了{total}张---------------")
+            if total>=150:
+                break

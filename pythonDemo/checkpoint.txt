@@ -1,3 +1,0 @@
-APP1
-app2
-app3
