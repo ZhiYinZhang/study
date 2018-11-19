@@ -3,3 +3,6 @@
 # @Author  : Z
 # @Email   : S
 # @File    : demo2.py
+import datetime
+
+print(datetime.datetime.fromtimestamp(1542599937.170))

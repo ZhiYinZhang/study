@@ -14,13 +14,13 @@ def readCheckpoint():
     读取checkpoint文件中的topic
     :return: 返回从checkpoint文件中读取的topic
     """
-    path='./checkpoint/topic.txt'
+    path='./checkpoint'
     topics = []
     if os.path.exists(path):
-        with open(path, mode='r') as file:
-            for i in json.load(file):
-                topics.append(i['topic'])
-        return topics
+       for p in  os.listdir(path):
+         with open(f"{path}/{p}", mode='r') as file:
+            topics.append(json.load(file)['topic'])
+       return topics
     else:
         print('no such file: %s'%path)
 def getKafkaClient():

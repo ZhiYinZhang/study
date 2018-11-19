@@ -1,0 +1,1 @@
+{"command": "add", "topic": "test1-log", "batch": 200, "retain": 2, "interval": 1, "unit": "h", "last_index": "test1-log_2018111915", "last_time": 1542610800.0}

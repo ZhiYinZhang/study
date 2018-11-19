@@ -9,13 +9,13 @@ es = Elasticsearch(hosts='http://119.29.165.154', port=9200)
 # total=int(sys.argv[1])
 index = 'test-log_20181114100544'
 if not es.indices.exists(index=index):
-    body = {"mappings": {
-        "log": {
-            "dynamic_date_formats": ["yyyy-MM-dd HH:mm:ssZ"]
-        }
-    }
-    }
-    es.indices.create(index=index,body=body)
+    # body = {"mappings": {
+    #     "log": {
+    #         "dynamic_date_formats": ["yyyy-MM-dd HH:mm:ssZ"]
+    #     }
+    # }
+    # }
+    es.indices.create(index=index)
 
 def benchmark(num):
     start=time.time()
