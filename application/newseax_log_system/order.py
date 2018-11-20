@@ -6,6 +6,7 @@ import json
 import re
 from pykafka import KafkaClient
 import argparse
+import subprocess as sp
 
 
 
@@ -54,12 +55,28 @@ def delete(param:dict):
         producer.stop()
     else:
         print(f"topic '{topic}' is not exists")
-
-
+def start():
+    cmd = "nohup python ES.py >./ES.log 2>&1 &"
+    sp.Popen(cmd,shell=True)
+def stop():
+    cmd = "ps -ef|grep ES.py|grep -v grep|awk '{print$2}'|xargs kill -9"
+    sp.Popen(cmd,shell=True)
+def status():
+    cmd = "ps -ef|grep ES.py|grep -v grep"
+    try:
+        result = sp.check_call(cmd, shell=True)
+        print("ES.py is running")
+    except:
+        print('ES.py  exit')
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
 
-    group = parser.add_mutually_exclusive_group(required=True)
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--start', dest='command', nargs='?', const='start', help='start ES.py')
+    group.add_argument('--stop', dest='command', nargs='?', const='stop', help="stop ES.py")
+    group.add_argument('--status', dest='command', nargs='?', const='status', help="ES.py's status")
+
     group.add_argument('--list', '-l', dest='command', nargs='?', const='query', help='列出所有正在消费的kafka topic')
     group.add_argument('--add', '-a', dest='command', nargs='?', const='add', help="添加一个topic去消费")
     group.add_argument('--delete', '-d', dest='command', nargs='?', const='delete', help='从正在消费的topics中移除')
@@ -78,12 +95,17 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
-
     command = args.command
     param = {}
     scheduler_topic = b'app'
     topic = args.topic
-    if command == 'query':
+    if command =='start':
+        start()
+    elif command == 'stop':
+        stop()
+    elif command == 'status':
+        status()
+    elif command == 'query':
         topics = readCheckpoint()
         print(topics)
     elif command == 'add':

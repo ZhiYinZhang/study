@@ -4,7 +4,7 @@ import pykafka
 from elasticsearch import helpers
 import time
 import sys
-from application.utils import *
+from application.newseax_log_system.utils import *
 
 
 
@@ -37,8 +37,7 @@ def kafka2ES(esClient, kafkaClient, param:dict,myThread):
 
     :param esClient: elasticSearch client
     :param kafkaClient:  kafka client
-    :param topic:  topic
-    :param batch: 每个批次的大小，即每次写多少条
+    :param param:
     :param mythread:
     """
     topic = param['topic']
@@ -115,6 +114,8 @@ if __name__=="__main__":
     kafka=pykafka.KafkaClient("10.18.0.11:9092,10.18.0.8:9092")
     # 连接ES
     es = Elasticsearch(hosts='http://119.29.165.154', port=9200)
+
+    manager_topic = b'app'
     #存储所有消费的topic及对应的线程对象的字典
     topics = {}
 
@@ -124,7 +125,7 @@ if __name__=="__main__":
          open_thread(param=i,topics=topics)
 
     #从管理topic(app)中获取应用topic名称   每个应用开启一个线程取消费
-    consumer=kafka.topics[b'app'].get_simple_consumer()
+    consumer=kafka.topics[manager_topic].get_simple_consumer()
     for messages in consumer:
         time.sleep(1)
         message=messages.value.decode()

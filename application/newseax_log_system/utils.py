@@ -24,10 +24,10 @@ format_map = {
 
 def createIndex(param: dict, esClient: Elasticsearch):
     """
-
+          创建新index
     :param param:
     :param esClient:
-    :return:
+    :return: index
     """
     topic = param['topic']
     now_time = datetime.now()
@@ -39,15 +39,16 @@ def createIndex(param: dict, esClient: Elasticsearch):
     threshold = param['interval'] * date_map[unit]
 
     if now_time.timestamp() - param['last_time'] >= threshold:  # 是否超过阈值
-        # 创建新索引
-        esClient.indices.create(index=new_index)
+        if not esClient.indices.exists(index=new_index):
+            # 创建新索引
+            esClient.indices.create(index=new_index)
 
-        param['last_index'] = new_index
-        param['last_time'] = get_index_createTime(esClient, new_index,param)
-        writeCheckpoint(param)
-        print(f"创建ES新index：{new_index}")
-        # 删除过期索引
-        del_expire_index(param=param, esClient=esClient)
+            param['last_index'] = new_index
+            param['last_time'] = get_index_createTime(esClient, new_index,param)
+            writeCheckpoint(param)
+            print(f"创建ES新index：{new_index}")
+            # 删除过期索引
+            del_expire_index(param=param, esClient=esClient)
     else:
         new_index = param['last_index']
 
