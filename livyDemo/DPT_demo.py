@@ -4,6 +4,8 @@
 import json,requests,textwrap,pprint,datetime
 from requests.models import Response
 import time
+import sys
+import random
 def create(param:dict):
     url = livy_host+"/sessions"
     rp = requests.post(url=url,data=json.dumps(param),headers=headers)
@@ -33,17 +35,36 @@ def get_status(location:str):
     else:
         pprint.pprint(location)
 
+def get_idle_session():
+    response = requests.get(url=livy_host+'/sessions',headers=headers)
+    sessions = {}
+    idle = []
+    busy = []
+    for session in response.json()['sessions']:
+        state = session['state']
+        if state == 'idle':
+            idle.append(session['id'])
+        else:
+            busy.append(session['id'])
+    sessions['idle'] = idle
+    sessions['busy'] = busy
+    return sessions
 
 if __name__=="__main__":
     livy_host = "http://10.18.0.11:8998"
     headers = {"Content-Type":"application/json"}
     param = {
         "pyFiles":["hdfs://Entrobus11:8020/user/zhangzy/DPT/lib.zip"],
-        "executorMemory":"2G",
-        "executorCores":1,
+        "executorMemory":"4G",
+        "executorCores":2,
         "numExecutors":2,
-        "queue":"badis"
     }
+
+    # sys.argv[1]数据为字符串： b{"data":{},"header":{},"process":[{}]}
+    data_str = sys.argv[1][1:]
+
+
+
 
     #要执行的代码
     code = """
@@ -156,10 +177,18 @@ if __name__=="__main__":
     # session = rp.headers.get('location')
     # print(session)
 
-    rp = submit(code=code,session_url="/sessions/14")
+    sessions = get_idle_session()
+    if len(sessions['idle'])>0:
+        #提交
+        rp = submit(code=code,session_url=f"/sessions/{sessions['idle'][0]}")
+    else:
+        i = random.randint(0,len(sessions['busy'])-1)
+        rp = submit(code=code,session_url=f"/sessions/{sessions['busy'][i]}")
+
+
     statement = rp.headers.get("location")
-    print(statement)
     start = datetime.datetime.now()
+    #遍历获取程序运行progress
     flag = True
     while flag:
         time.sleep(1)

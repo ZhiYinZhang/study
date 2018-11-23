@@ -3,7 +3,14 @@
 # @Author  : Z
 # @Email   : S
 # @File    : demo2.py
-import datetime
+import hdfs
+import json
+import subprocess as sp
+a= '{"a":1,"b":2}'
+n = 1
+b = f"""
+n = {n}
+a = '{a}'
+"""
 
-print(datetime.datetime.fromtimestamp(1542675593.960))
-
+print(b)

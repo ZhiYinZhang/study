@@ -16,7 +16,6 @@ spark=SparkSession.builder \
     .master("local[2]") \
     .getOrCreate()
 sc:SparkContext = spark.sparkContext
-sc.setLocalProperty(key="spark.yarn.queue",value="badis")
 
 
 # sc.addPyFile("/home/zhangzy/DPT/lib.zip")
@@ -25,6 +24,8 @@ df = spark.read\
      .option('inferSchema',"true")\
      .option('header','true')\
      .csv('e://pythonProject/dataset/model07')
+print(sc.startTime)
+print(sc.sparkUser())
 
 def addIndex(index_name, row):
     global i
@@ -41,7 +42,7 @@ def addIndex(index_name, row):
 # end1=time.time()
 # df3.show()
 # df3.write.csv(path="e://pythonProject/dataset/model7_test",mode='overwrite',header=True)
-
+#
 # df3 = df3.select('index')
 # df3.printSchema()
 
@@ -60,3 +61,5 @@ def addIndex(index_name, row):
 
 # print(end1-start1)
 # print(end2-start2)
+
+df.show()
