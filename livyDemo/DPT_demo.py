@@ -35,7 +35,7 @@ def get_status(location:str):
     else:
         pprint.pprint(location)
 
-def get_idle_session():
+def get_sessions():
     response = requests.get(url=livy_host+'/sessions',headers=headers)
     sessions = {}
     idle = []
@@ -49,6 +49,15 @@ def get_idle_session():
     sessions['idle'] = idle
     sessions['busy'] = busy
     return sessions
+def get_wait_statements(sessionId):
+    url = livy_host+f"/sessions/{sessionId}/statements"
+    response = requests.get(url=url)
+    statements = response.json()['statements']
+    wait = 0
+    for i in statements:
+        if i['state'] == 'waiting':
+            wait+=1
+    return wait
 
 if __name__=="__main__":
     livy_host = "http://10.18.0.11:8998"
@@ -60,10 +69,8 @@ if __name__=="__main__":
         "numExecutors":2,
     }
 
-    # sys.argv[1]数据为字符串： b{"data":{},"header":{},"process":[{}]}
-    data_str = sys.argv[1][1:]
 
-
+    # param_path = sys.argv[1]
 
 
     #要执行的代码
@@ -171,31 +178,40 @@ if __name__=="__main__":
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())}:{result}")
     print("spark stop")
     """
-    # 创建spark应用
+    # # 创建spark应用
     # rp = create(param)
-    #   /sessions/{sessionId}
+    # # /sessions/{sessionId}
     # session = rp.headers.get('location')
     # print(session)
 
-    sessions = get_idle_session()
-    if len(sessions['idle'])>0:
-        #提交
-        rp = submit(code=code,session_url=f"/sessions/{sessions['idle'][0]}")
-    else:
-        i = random.randint(0,len(sessions['busy'])-1)
-        rp = submit(code=code,session_url=f"/sessions/{sessions['busy'][i]}")
+    # sessions = get_sessions()
+    # if len(sessions['idle'])>0:
+    #     #提交
+    #     rp = submit(code=code,session_url=f"/sessions/{sessions['idle'][0]}")
+    # else:
+    #     i = random.randint(0,len(sessions['busy'])-1)
+    #     rp = submit(code=code,session_url=f"/sessions/{sessions['busy'][i]}")
+    #
+    #
+    # statement = rp.headers.get("location")
+    # start = datetime.datetime.now()
+    # #遍历获取程序运行progress
+    # flag = True
+    # while flag:
+    #     time.sleep(1)
+    #     result = get_status(statement)
+    #     if result['state']=="available":
+    #         flag = False
+    #     print(f"progress:{result['progress']}")
+    # end = datetime.datetime.now()
+    # pprint.pprint(result)
+    # print(f"所用时间:{end-start}")
 
-
-    statement = rp.headers.get("location")
-    start = datetime.datetime.now()
-    #遍历获取程序运行progress
-    flag = True
-    while flag:
-        time.sleep(1)
-        result = get_status(statement)
-        if result['state']=="available":
-            flag = False
-        print(f"progress:{result['progress']}")
-    end = datetime.datetime.now()
-    pprint.pprint(result)
-    print(f"所用时间:{end-start}")
+    sessions = get_sessions()
+    busys = sessions['busy']
+    sessionId_waitNum = {}
+    for busy in busys:
+        waitNum = get_wait_statements(busy)
+        sessionId_waitNum[busy] = waitNum
+    print(sessionId_waitNum)
+    # sorted(sessionId_waitNum,key='')
