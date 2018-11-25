@@ -6,6 +6,7 @@ from requests.models import Response
 import time
 import sys
 import random
+from  operator import *
 def create(param:dict):
     url = livy_host+"/sessions"
     rp = requests.post(url=url,data=json.dumps(param),headers=headers)
@@ -179,19 +180,30 @@ if __name__=="__main__":
     print("spark stop")
     """
     # # 创建spark应用
-    # rp = create(param)
-    # # /sessions/{sessionId}
-    # session = rp.headers.get('location')
-    # print(session)
+    # for i in range(10):
+    #     rp = create(param)
+    #     # /sessions/{sessionId}
+    #     session = rp.headers.get('location')
+    #     print(session)
 
     # sessions = get_sessions()
     # if len(sessions['idle'])>0:
     #     #提交
     #     rp = submit(code=code,session_url=f"/sessions/{sessions['idle'][0]}")
     # else:
-    #     i = random.randint(0,len(sessions['busy'])-1)
-    #     rp = submit(code=code,session_url=f"/sessions/{sessions['busy'][i]}")
-    #
+    #     busys = sessions['busy']
+    #     #获取等待的job最少的一个session
+    #     if len(busys) > 0:
+    #         #    (sessionId,waitNum)
+    #         sessionId_waitNum = []
+    #         for busy in busys:
+    #             waitNum = get_wait_statements(busy)
+    #             sessionId_waitNum.append((busy, waitNum))
+    #         print(sessionId_waitNum)
+    #         sort = sorted(sessionId_waitNum, key=lambda x: x[1])
+    #         sessionId = sort[0][0]
+    #         rp = submit(code=code,session_url=f"/sessions/{sessionId}")
+
     #
     # statement = rp.headers.get("location")
     # start = datetime.datetime.now()
@@ -208,10 +220,8 @@ if __name__=="__main__":
     # print(f"所用时间:{end-start}")
 
     sessions = get_sessions()
-    busys = sessions['busy']
-    sessionId_waitNum = {}
-    for busy in busys:
-        waitNum = get_wait_statements(busy)
-        sessionId_waitNum[busy] = waitNum
-    print(sessionId_waitNum)
-    # sorted(sessionId_waitNum,key='')
+    busy_num = len(sessions['busy'])
+    idle_num = len(sessions['idle'])
+    total_session = busy_num + idle_num
+    print(f"total sessions:{total_session}")
+    # if total_session

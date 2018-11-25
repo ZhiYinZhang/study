@@ -43,11 +43,12 @@ def kafka2ES(esClient, kafkaClient, param:dict,myThread):
     topic = param['topic']
     if not param.get('last_index'):
         indexs = get_app_indexs(topic, esClient)
-        if len(indexs) == 0:  # 首次创建
+        if len(indexs) == 0:  # 首次创建,创建第一个index
+            #根据unit得到topic拼接的日期格式，得到index
             last_index = get_index(topic=topic,date_format=format_map[param['unit']])
             # 创建新索引
             esClient.indices.create(index=last_index)
-
+            #从ES中获取index创建时间戳
             last_time = get_index_createTime(esClient,last_index,param)
 
             param['last_index'] = last_index
@@ -55,6 +56,7 @@ def kafka2ES(esClient, kafkaClient, param:dict,myThread):
             writeCheckpoint(param)
             print(f"首次创建ES的index：{last_index}")
         else:#上次正常退出 即使用--delete
+            #获取ES中该topic创建时间最近的一个index
             last_index = indexs[0]
             param['last_index'] = last_index
             last_time = get_index_createTime(esClient, last_index,param)
