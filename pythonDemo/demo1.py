@@ -3,42 +3,35 @@
 # @Author  : Z
 # @Email   : S
 # @File    : demo1.py
-import os,time
-import threading
-import elasticsearch
-from pykafka import KafkaClient
-def getDate(seconds):
-    # current_time=time.time()
-    date= time.strftime("%Y%m%d%H%M", time.localtime(seconds))
-    return int(date)
-def deleteExpire(expire_time):
-    expire_file_path=f"{path}/log_{expire_time}.txt"
-    if os.path.exists(expire_file_path):
-        os.remove(expire_file_path)
-path="e:/javacode/log"
-curr_time=time.time()
+from random import random, randint
+from mlflow import log_metric, log_param, log_artifacts
+import mlflow
 
-start_date=getDate(curr_time)
-end_date=getDate(curr_time+3*60)
-expire_date=getDate(curr_time-6*60)
+mlflow.set_tracking_uri("http://10.18.0.12:5001")
 
-data=[]
-i=0
-while 1:
-    # time.sleep(1)
-    curr_time=time.time()
-    curr_date=getDate(curr_time)
-    if curr_date>=end_date:
-        start_date=curr_date
-        end_date=getDate(curr_time+3*60)
-        expire_date=getDate(curr_time-6*60)
-        deleteExpire(expire_date)
-    data.append(str(i)+'\n')
-    if len(data)==100:
-        with open(f"{path}/log_{start_date}.txt",'a') as file:
-            file.writelines(data)
-            del(data[:])
+import os
+from random import random, randint
 
-    i+=1
-    print(f"start:{start_date} end:{end_date} current:{curr_date} expire:{expire_date}")
+from mlflow import log_metric, log_param, log_artifacts
 
+if __name__ == "__main__":
+    print("Running mlflow_tracking.py")
+
+    log_param("param1", randint(0, 100))
+
+    log_metric("foo", random())
+    log_metric("foo", random() + 1)
+    log_metric("foo", random() + 2)
+
+    # if not os.path.exists("outputs"):
+    #    os.makedirs("outputs")
+    # with open("outputs/test.txt", "w") as f:
+    #    f.write("hello world!")
+
+    # log_artifacts("outputs")
+
+# with mlflow.start_run():
+#             log_param("param1", randint(0, 100))
+#             log_metric("foo", random())
+#             log_metric("foo", random() + 1)
+#             log_metric("foo", random() + 2)
