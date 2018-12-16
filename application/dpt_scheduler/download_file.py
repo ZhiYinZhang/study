@@ -7,6 +7,8 @@ import os
 import hdfs
 import json
 import sys
+from hdfs.util import AsyncWriter
+
 def get_hefsClient():
     url = "http://10.18.0.28:50070"
     user = 'zhangzy'
@@ -17,7 +19,7 @@ def download_2_hdfs(file_url,file_name):
     print(f"文件地址：{file_url}")
     print(f"文件名：{file_name}")
     print("开始下载。。。。。。")
-    response = requests.get(url=file_url,stream=True)
+    response = requests.get(url=file_url)
     origin_file_size = int(response.headers['Content-Length'])
     print(f"原始文件大小：{origin_file_size}")
 
@@ -25,8 +27,11 @@ def download_2_hdfs(file_url,file_name):
     hdfs_client = get_hefsClient()
     hdfs_filePath = f"./{file_name}"
     print("开始上传到hdfs")
-    hdfs_client.write(hdfs_path=hdfs_filePath, data=response.content,overwrite=True)
+    # hdfs_client.write(hdfs_path=hdfs_filePath, data=response.content,overwrite=True)
 
+    with AsyncWriter(lambda data:requests.post(url='http://10.18.0.28:50070/user/zhangzy/test.txt',data=data)) as writer:
+        writer.write(response.content)
+    hdfs_client.write
     print("上传完成")
     hdfs_file_size = hdfs_client.status(hdfs_filePath)['length']
     print(f"上传到hdfs后文件大小：{hdfs_file_size}")
@@ -39,10 +44,10 @@ def download_2_hdfs(file_url,file_name):
 if __name__=="__main__":
         file_url = "https://archive.apache.org/dist/hive/hive-3.1.1/apache-hive-3.1.1-src.tar.gz"
         file_name = file_url.split("/")[-1]
-        # try:
-        #    get_hefsClient().delete('./apache-hive-3.1.1-src.tar.gz')
-        # except:
-        #     pass
+        try:
+           get_hefsClient().delete('./apache-hive-3.1.1-src.tar.gz')
+        except:
+            pass
         flag = True
         for i in range(3):
            if flag==True:

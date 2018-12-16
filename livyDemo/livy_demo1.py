@@ -7,16 +7,22 @@ from livyDemo.DPT_demo import *
 import datetime
 import time
 if __name__=="__main__":
-    livy_host = "http://entrobus28:8998"
+    livy_host = "http://entrobus29:8998"
     headers = {"Content-Type": "application/json"}
     pycode ="""
-    for i in range(10):
-      print(i)
+    import time
+    import sys
+    data_args = "aaaaaaaaaa"
+    print(sys.version)
     """
-    # for i in range(25,27):
+    #删除session
+    # for i in range(7,9):
     #    rq.delete(url=livy_host+f"/sessions/{i}")
+    #
+    # 提交
+    rp = submit(pycode,session_url="/sessions/10")
 
-    rp = submit(pycode,session_url="/sessions/28")
+
     statement = rp.headers.get("location")
     start = datetime.datetime.now()
     #遍历获取程序运行progress
