@@ -60,15 +60,15 @@ def get_wait_statements(sessionId):
             wait+=1
     return wait
 
+livy_host = "http://10.18.0.28:8998"
+headers = {"Content-Type":"application/json"}
+param = {
+    "pyFiles":["hdfs://Entrobus11:8020/user/zhangzy/DPT/lib.zip"],
+    "executorMemory":"4G",
+    "executorCores":2,
+    "numExecutors":2,
+}
 if __name__=="__main__":
-    livy_host = "http://10.18.0.11:8998"
-    headers = {"Content-Type":"application/json"}
-    param = {
-        "pyFiles":["hdfs://Entrobus11:8020/user/zhangzy/DPT/lib.zip"],
-        "executorMemory":"4G",
-        "executorCores":2,
-        "numExecutors":2,
-    }
 
 
     # param_path = sys.argv[1]

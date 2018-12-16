@@ -2,30 +2,41 @@
 # -*- coding:utf-8 -*-
 import subprocess as sp
 import argparse
+import time
 def start_consumer():
     command = "nohup python3 Consumer.py >./DPT.log 2>&1 &"
     try:
-      sp.check_output("ps -ef|grep Consumer.py |grep -v grep", shell=True)
+      status_consumer()
       print("\nconsumer is running,Stop it first\n")
     except:
       sp.Popen(command, shell=True)
+      time.sleep(1)
+      print("\n start consumer \n")
 def start_livy():
     command = "../livy-0.5.0-incubating-bin/bin/livy-server start"
-    sp.Popen(command, shell=True)
+    try:
+        sp.check_output(command, shell=True)
+        print("\n start livy \n")
+    except:
+        print("\nlivy is running,Stop it first\n")
 def start_monitor():
     command = "nohup python3 monitor.py >/dev/null 2>&1 &"
     try:
-        sp.check_output("ps -ef|grep monitor.py |grep -v grep", shell=True)
-        print("\nmonitor is running.Stop it first\n")
+        status_monitor()
+        print("\nmonitor is running,Stop it first\n")
     except:
         sp.Popen(command, shell=True)
+        time.sleep(1)
+        print("\n start monitor \n")
 
 
 def stop_consumer():
     command = "ps -ef|grep Consumer.py |grep -v grep |awk '{print$2}'|xargs kill -9"
     try:
-      sp.check_output("ps -ef|grep Consumer.py |grep -v grep", shell=True)
-      sp.Popen(command, shell=True)
+        status_consumer()
+        sp.Popen(command, shell=True)
+        time.sleep(1)
+        print("\n stoping consumer \n")
     except:
         print("\n no consumer to stop! \n")
 def stop_livy():
@@ -34,33 +45,24 @@ def stop_livy():
 def stop_monitor():
     command = "ps -ef|grep monitor.py |grep -v grep |awk '{print$2}'|xargs kill -9"
     try:
-      sp.check_output("ps -ef|grep monitor.py |grep -v grep", shell=True)
-      sp.Popen(command, shell=True)
+        status_monitor()
+        sp.Popen(command, shell=True)
+        time.sleep(1)
+        print("\n stoping monitor \n")
     except:
         print("\n no monitor to stop!\n")
 
 
 def status_consumer():
     command = "ps -ef|grep Consumer.py |grep -v grep"
-    try:
-        sp.check_output(command, shell=True)
-        print("\nconsumer is running\n")
-    except:
-        print("\nconsumer is not running\n")
+    sp.check_output(command, shell=True)
 def status_livy():
     command = "../livy-0.5.0-incubating-bin/bin/livy-server status"
-    try:
-        sp.check_output(command, shell=True)
-        print("\nlivy is running\n")
-    except:
-        print("\nlivy is not running\n")
+    sp.check_call(command, shell=True)
 def status_monitor():
     command = "ps -ef|grep monitor.py |grep -v grep"
-    try:
-        sp.check_output(command, shell=True)
-        print("\nmonitor is running\n")
-    except:
-        print("\nmonitor is not running\n")
+    sp.check_output(command, shell=True)
+
 
 
 
@@ -105,12 +107,30 @@ if __name__=="__main__":
     elif args.status:
         status = args.status
         if status == 'consumer':
-           status_consumer()
+            try:
+                status_consumer()
+                print("\nconsumer is running\n")
+            except:
+                print("\nconsumer is not running\n")
         elif status == "livy":
            status_livy()
         elif status == "monitor":
-           status_monitor()
+           try:
+              status_monitor()
+              print("\nmonitor is running\n")
+           except:
+              print("\nmonitor is not running\n")
         elif status == "all":
-            status_consumer()
+            try:
+                status_consumer()
+                print("\nconsumer is running\n")
+            except:
+                print("\nconsumer is not running\n")
+
             status_livy()
-            status_monitor()
+
+            try:
+                status_monitor()
+                print("\nmonitor is running\n")
+            except:
+                print("\nmonitor is not running\n")

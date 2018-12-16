@@ -1,8 +1,7 @@
-#-*- coding: utf-8 -*-
-# @Time    : 2018/10/4 0:09
-# @Author  : Z
-# @Email   : S
-# @File    : demo2.py
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+# datetime:2018/12/3 10:00
+
 import re
 import requests as rq
 from bs4 import BeautifulSoup
@@ -74,9 +73,8 @@ def download_video(video_url,name):
 
 
 if __name__=='__main__':
-    # categorys=['babe','zhubo','ribenwuma']
-    categorys=['ribenwuma']
-    path= 'http://www.avtbg.com/'
+    categorys=[]
+    path= ''
     for category in categorys:
         first_page_url = f'{path}{category}/'
         if category=='babe':
