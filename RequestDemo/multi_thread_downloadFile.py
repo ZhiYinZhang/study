@@ -4,7 +4,7 @@
 import requests as rq
 import time
 import threading
-
+from utils.split_integer import split_range
 
 def continue_download(total_size):
     total = total_size
@@ -26,16 +26,36 @@ def continue_download(total_size):
     rp = rq.get(image_url, headers=headers)
     multi_thread_download(rp.content)
 
+def get_size(file_url):
+    try:
+        rp = rq.head(url=file_url)
+        total_size = int(rp.headers['Content-Length'])
+    except:
+        # 正常请求，没有Content-Length字段。 通过请求一部分文件内容
+        headers = {"Range": f"bytes={0}-{1}"}
+        h = rq.head(url=file_url, headers=headers)
+
+        #  'Content-Range': 'bytes 0-1/26269919'
+        total_size = int(h.headers['Content-Range'].split('/')[1])
+    return total_size
+
 def multi_thread_download(data):
     with open("e://test//text//text.jpg",'ab+') as writer:
         writer.write(data)
 
 class myThread(threading.Thread):
-    def __init__(self,data:dict,Range):
+    def __init__(self,data:dict,Range,thread_name,file_url):
         threading.Thread.__init__(self)
         self.data = data
+        self.thread_name = thread_name
+        self.Range = Range
+        self.file_url = file_url
     def run(self):
-        pass
+        print(self.thread_name,self.Range)
+        headers = {"Range":f"bytes={self.Range[0]}-{self.Range[1]}"}
+        rp = rq.get(url=self.file_url,headers=headers)
+
+        self.data[self.thread_name] = rp.content
 
 
 
@@ -44,42 +64,36 @@ if __name__=="__main__":
     file_url1 = "http://fdfs-test.entrobus.com/group1/M00/03/6F/CmhqV1wON1eAOUPpAAV6jNM5JUY563.txt" #359052
     image_url = "http://pic24.nipic.com/20121010/3798632_184253198370_2.jpg"  # 283534
 
-    headers = {"Range": f"bytes={0}-{10000}"}
-    start = time.time()
-    # h = rq.head(url=file_url)
-    rp = rq.get(url=file_url1)
-    result = rp.content
-    stop = time.time()
-    print("time:",stop-start)
-    print(rp.headers)
 
 
 
 
-    href = "http://10.18.0.28:50070/webhdfs/v1/user/zhangzy/error.txt?op=OPEN" #759
-    # x = 0
-    # y = 500000
-    headers = {"Range":f"bytes={0}-{1}"}
-    rp = rq.get(href,headers=headers)
-    with open("e://test//public//error1.txt",'ab+') as writer:
-        # writer.seek(200000)
-        writer.write(rp.content)
+    url = file_url
+    data = {}
 
 
-    # interval = 100
-    # x = 0
-    # d = {}
-    # # l = [('a',x+0*interval),('b',x+1*interval),(x+2*interval)]
-    # l = [('a', 0), ('b', x + 100000), ('c',x + 200000)]
-    # for i,j in l:
-    #     headers = {"Range":f"bytes={j}-{j+99999}"}
-    #     rp = rq.get(image_url,headers=headers)
-    #     d[i] = rp.content
-    #
-    # total = b''
-    # for key in d.keys():
-    #     total += d[key]
-    #
-    # print(len(total))
-    # with open("e://test//text//text.jpg",'ab+') as writer:
-    #     writer.write(total)
+    start1 = time.time()
+    r1 = rq.get(url=url).content
+    stop1 = time.time()
+
+    start2 = time.time()
+    total_size = get_size(url)
+    print(total_size)
+    ranges = split_range(total_size,10)
+    print(ranges)
+    i = 0
+    threads = {}
+    for r in ranges:
+        print('Thread%s'%str(i))
+        thread_name = 'Thread%s'%str(i)
+        th = myThread(data,r,thread_name,url)
+        threads[thread_name] = th
+        th.start()
+        i += 1
+    for thread in threads.keys():
+        threads[thread].join()
+
+    stop2 = time.time()
+
+    print(stop1-start1,stop2-start2)
+    keys = sorted(data.keys())
