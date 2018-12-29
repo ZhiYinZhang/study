@@ -49,13 +49,16 @@ if __name__=="__main__":
     #     d = {num_key:num[i],cores_key:cores[i],memory_key:memory[i]}
     #     changeValue(d,filePath1)
 
-    import sys
+    # import sys
+    #
+    # for i in range(11):
+    #     rate = (i) / 10
+    #     num = int(rate * 100)
+    #     # sys.stdout.write(f"\r[{'#'*num}{' '*(100-num)}]")
+    #     # sys.stdout.flush()
+    #     time.sleep(1)
+    #     sys.stdout.write(f"\r [{'#'*num}{' '*(100-num)}] {rate*100}%")
+    #     sys.stdout.flush()
 
-    for i in range(11):
-        rate = (i) / 10
-        num = int(rate * 100)
-        # sys.stdout.write(f"\r[{'#'*num}{' '*(100-num)}]")
-        # sys.stdout.flush()
-        time.sleep(1)
-        sys.stdout.write(f"\r [{'#'*num}{' '*(100-num)}] {rate*100}%")
-        sys.stdout.flush()
+     pass
+

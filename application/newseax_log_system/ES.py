@@ -62,7 +62,7 @@ def kafka2ES(esClient, kafkaClient, param:dict,myThread):
             last_time = get_index_createTime(esClient, last_index,param)
             param['last_time'] = last_time
             writeCheckpoint(param)
-    else:#上次非正常退出
+    else:#上次非正常退出,即不是通过--delete
         pass
 
 
