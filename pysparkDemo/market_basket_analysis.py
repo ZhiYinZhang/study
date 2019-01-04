@@ -65,6 +65,12 @@ top_sql = "select count(opp.order_id) as orders, p.product_name as popular_produ
 space_sql = "select d.department, count(distinct p.product_id) as products\n  from products p\n    inner join departments d\n      on d.department_id = p.department_id\n group by d.department\n order by products desc\n limit 10"
 #    spark.sql(space_sql).show()
 
+
+
+
+
+
+#---------------------------------------------------Train ML Model-------------------------------------------------
 #Organize and view Shopping Basket
 #Organize the data by shopping basket
 rawData = spark.sql("select p.product_name, o.order_id from products p inner join order_products_train o where o.product_id = p.product_id")
@@ -72,9 +78,6 @@ baskets = rawData.groupBy("order_id").agg(collect_set("product_name").alias("ite
 baskets.createOrReplaceTempView("baskets")
 
 
-
-
-#---------------------------------------------------Train ML Model-------------------------------------------------
 # use FP-growth
 # Extract out the items
 baskets_ds = spark.sql("select items from baskets").toDF("items")

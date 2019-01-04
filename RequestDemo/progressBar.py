@@ -10,13 +10,13 @@ from datetime import datetime
 def download_file(file_url,file_path,file_name):
     response = requests.get(url=file_url,stream=True)
     total_size = int(response.headers['Content-Length'])
-    print(f"文件大小：{total_size}")
+    print(f"{file_name}文件大小：{total_size}")
 
     start_time = int(datetime.now().timestamp())
     print("开始下载。。。。。。")
     temp_size = 0
     with open(file_path,'wb') as f:
-        for chunk in response.iter_content(chunk_size=4096):
+        for chunk in response.iter_content(chunk_size=10240):
             temp_size +=len(chunk)
             #done是已经下载的进度条长度，50是进度条的长度
             done = int(100*(temp_size/total_size))
@@ -36,6 +36,6 @@ def download_file(file_url,file_path,file_name):
 if __name__=="__main__":
     file_url = "https://archive.apache.org/dist/hive/hive-3.1.1/apache-hive-3.1.1-bin.tar.gz"
     file_name = file_url.split("/")[-1]
-    file_path = f"E:/javacode/{file_name}"
+    file_path = f"E:/test/{file_name}"
 
     download_file(file_url=file_url,file_path=file_path,file_name=file_name)
