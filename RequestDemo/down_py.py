@@ -6,6 +6,10 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 import re
 from RequestDemo.progressBar import *
+"""
+在pypi网站下载python模块的离线jar包
+
+"""
 app = ['absl-py', 'appdirs', 'argcomplete', 'astor', 'attrs', 'bitcoin', 'black', 'boto3', 'botocore', 'bz2file',
        'configparser', 'databricks-cli', 'dist-keras', 'docopt', 'elephas', 'fastparquet', 'fbprophet', 'future',
        'gast', 'gensim', 'gitdb2', 'GitPython', 'grpcio', 'gunicorn', 'hdfs', 'hyperas', 'hyperopt', 'jmespath',
