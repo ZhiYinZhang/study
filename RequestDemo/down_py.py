@@ -33,7 +33,7 @@ for i in app[19:]:
         name = app_url.split("/")[-1]
 
 
-        download_file(file_url=app_url,file_path=file_path+name,file_name=name)
+        progressBar(file_url=app_url,file_path=file_path+name,file_name=name)
     except:
         print("失败:",i)
 
