@@ -6,26 +6,19 @@
 from pyspark.sql import SparkSession,DataFrame,Row,Window
 from pyspark import SparkContext
 from pyspark.accumulators import *
-from pyspark.sql import functions
+from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import pandas as pd
 import numpy as np
 import time
 spark=SparkSession.builder \
     .appName("vectorAssembler") \
-    .master("local[2]") \
+    .master("local[3]") \
     .getOrCreate()
 sc:SparkContext = spark.sparkContext
 
 
 # sc.addPyFile("/home/zhangzy/DPT/lib.zip")
-
-df = spark.read\
-     .option('inferSchema',"true")\
-     .option('header','true')\
-     .csv('e://pythonProject/dataset/model07')
-print(sc.startTime)
-print(sc.sparkUser())
 
 def addIndex(index_name, row):
     global i
@@ -54,12 +47,21 @@ def addIndex(index_name, row):
 # end2=time.time()
 # df4.show(truncate=False)
 
-
-
-
-
-
 # print(end1-start1)
 # print(end2-start2)
 
-df.show()
+#方法三：使用monotonically_increasing_id()
+
+# df1 = spark.range(0,1000000).toDF("col1").repartition(1)
+# print(df1.rdd.getNumPartitions())
+# df1.withColumn("id",monotonically_increasing_id())\
+#     .select(col("*"),spark_partition_id().alias("partition"))\
+#     .select(sum(col("id"))).show()
+
+df1 = spark.range(10).toDF("col1")
+df2 = spark.createDataFrame([("a",),('b',),('c',),('d',),('e',),('f',),('g',),('h',),('i',),('j',)]).toDF("col2")
+
+print(df1.rdd.getNumPartitions(),df2.rdd.getNumPartitions())
+
+df2.select(col("*"),spark_partition_id()).show()
+
