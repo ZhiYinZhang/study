@@ -4,13 +4,23 @@
 import time
 import sys
 
-temp_size = 0
-total_size = 50
 
-for i in range(51):
-    # time.sleep(1)
-    temp_size = i
-    done = 50*temp_size//total_size
-    s = 100*temp_size/total_size
-    sys.stdout.write("\r[%s%s] %d%%"%('#'*done,' '*(50-done),s))
-    sys.stdout.flush()
+from pyspark.sql import SparkSession
+from pyspark import RDD
+from pyspark.sql.functions import *
+spark = SparkSession.builder \
+    .appName("rdd2df")\
+    .master("local[2]")\
+    .getOrCreate()
+
+df1=spark.range(0,10000).toDF("col1")
+print(df1.schema)
+
+r:RDD = df1.rdd
+
+# spark.createDataFrame(data=r.takeSample()).show()
+
+a = r.takeSample(withReplacement=True,num=100000)
+print(type(a),len(a))
+
+
