@@ -20,5 +20,8 @@ except:
 
 try:
     child.expect([pexpect.TIMEOUT,pexpect.EOF])
+
+
 except:
     print(str(child))
+
