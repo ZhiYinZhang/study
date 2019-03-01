@@ -1,18 +1,46 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # datetime:2019/1/30 18:51
+import re
+import threading
 import time
 
-filepath = "E:\\test\\csv\\fang_apt_changde.txt"
+class myThread(threading.Thread):
+    def __init__(self,threadName,file):
+         threading.Thread.__init__(self)
+         threading.Thread.setName(self,name=threadName)
 
-for i in range(10):
-    time.sleep(5)
-    with open(filepath,"r",encoding='utf-8') as reader:
-        result = reader.readlines()
+         self.threadName=threadName
+         self.file=file
+
+         self.flag=True
 
 
-    with open(f"E:\\test\csv\stream\\{i}.txt","w",encoding='utf-8') as writer:
-        writer.writelines(result)
+         self.__flag=threading.Event()
+         self.__flag.set()
+         self.__running=threading.Event()
+         self.__running.set()
+    def run(self):
+        print("开启线程:" + self.threadName)
+        print(id(self.flag))
+        test_stop(self)
+        print("退出线程:" + self.threadName)
+    def stop(self):
+        # self.__running.clear()
+        self.flag=False
+
+def test_stop(myThread):
+
+    for i in range(100):
+        if not myThread.flag:exit()
+        # if not self.__running.isSet(): break
+
+        time.sleep(1)
+        print(i)
 
 
-print(result)
+flag=True
+if (not flag) | True:
+    print(2)
+
+

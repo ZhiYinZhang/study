@@ -65,9 +65,6 @@ if __name__=="__main__":
     image_url = "http://pic24.nipic.com/20121010/3798632_184253198370_2.jpg"  # 283534
 
 
-
-
-
     url = file_url
     data = {}
 
@@ -77,10 +74,14 @@ if __name__=="__main__":
     stop1 = time.time()
 
     start2 = time.time()
+    #获取文件大小
     total_size = get_size(url)
     print(total_size)
+
+    #将文件切成10份
     ranges = split_range(total_size,10)
     print(ranges)
+
     i = 0
     threads = {}
     for r in ranges:

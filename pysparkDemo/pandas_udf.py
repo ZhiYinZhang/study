@@ -4,18 +4,14 @@
 from pyspark.sql.functions import pandas_udf,PandasUDFType
 from pyspark.sql import SparkSession
 import pyspark
-
-spark = SparkSession \
+import time
+spark:SparkSession = SparkSession \
           .builder \
           .master("local[2]") \
           .appName("pandas_udf") \
+          .config("spark.sql.execution.arrow.enabled", "true") \
           .getOrCreate()
 
-df = spark.read \
-          .option("inferSchema","true") \
-          .option("header","true") \
-          .format("csv") \
-          .option("path","E:\pythonProject\dataset\model01_train.txt") \
-          .load()
-
-df.show()
+print(time.time())
+df = spark.range(10000000)
+print(time.time())

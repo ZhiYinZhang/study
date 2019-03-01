@@ -20,7 +20,7 @@ def progressBar(file_url,file_path,file_name):
     with open(file_path,'wb') as f:
         for chunk in response.iter_content(chunk_size=10240):
             temp_size +=len(chunk)
-            #done是已经下载的进度条长度，50是进度条的长度
+            #done是已经下载的进度条长度，100是进度条的长度
             done = int(100*(temp_size/total_size))
             f.write(chunk)
             f.flush()
