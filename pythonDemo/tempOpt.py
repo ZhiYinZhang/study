@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # datetime:2019/1/11 14:59
-import json
-import pandas as pd
-import numpy as np
+import sys
+import psutil
+import os
+import time
+info=psutil.virtual_memory()
 
-m={"a":1,"b":3,"c":2,"d":0.5}
+process=psutil.Process(os.getpid())
 
-m1=sorted(m.items(),key=lambda x:x[1],reverse=True)
+l=[]
+i=0
+last_mem=0
+while True:
+    i += 10
+    l.append(i*i)
+    time.sleep(0.1)
+    mem = process.memory_info().rss
+
+    if mem>last_mem:
+        last_mem=mem
+        print(mem,"byte \n",mem/1024/1024,"M")
+        print("-------------------------------")
+    if mem>20*1024*1024:
+        print("OutOfMemory:java heap space")

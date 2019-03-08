@@ -2,7 +2,9 @@
 # @Time    : 2018/3/25 14:50
 # @Author  : Z
 # @Email   : S
-
+"""
+翻译程序
+"""
 from translate import Translator
 import time
 import traceback as tb

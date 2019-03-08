@@ -7,7 +7,9 @@ import hdfs
 import pandas as pd
 from pandas import DataFrame
 from pandas._libs.tslibs.timestamps import *
-
+"""
+自定义json模块的encoder
+"""
 class DateEncoder(json.JSONEncoder):
     def default(self,obj):
         if isinstance(obj,datetime.datetime):
