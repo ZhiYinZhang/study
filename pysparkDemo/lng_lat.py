@@ -20,23 +20,31 @@ def haversine(lng1:Column,lat1:Column,lng2:Column,lat2:Column):
                   cos(radLat1) * cos(radLat2) * pow(sin((radLng1 - radLng2) / 2.0), 2))
       )*2.0 * radius
       return result
+def get_spark():
+      spark = SparkSession.builder \
+            .appName("structStreaming") \
+            .master("local[2]") \
+            .getOrCreate()
+      spark.sparkContext.setLogLevel("WARN")
+      return spark
 
-spark=SparkSession.builder \
-      .appName("structStreaming") \
-      .master("local[2]") \
-      .getOrCreate()
-spark.sparkContext.setLogLevel("WARN")
-df=spark.read.csv("E:\\test\city_map\\example2018-12-05-12-02-23去重结果.csv",header=True,inferSchema=True)
+# def get_distance(retail_store,service):
+
+if __name__=="__main__":
+      spark:SparkSession=get_spark()
+
+      retail_store="e://dataset//yancao//株洲-烟草零售.csv"
+      service="E:\dataset\yancao\株洲-coordinate-v2\餐饮\餐饮服务_餐饮相关场所_餐饮相关.csv"
+
+      store_df=spark.read.csv(retail_store,header=True,inferSchema=True)
+      service_df=spark.read.csv(service,header=True,inferSchema=True)
 
 
-
-df_id=df.withColumn("cust_id",monotonically_increasing_id())
-
-data0,data1=df_id.randomSplit([0.5,0.5])
-
-data1=data1.withColumnRenamed("wgs_lng","wgs_lng1").withColumnRenamed("wgs_lat","wgs_lat1")
-df_cr:DataFrame=data0.crossJoin(data1)
-
-df_ha=df_cr.select(col("*"),haversine(df_cr.wgs_lng,df_cr.wgs_lat,df_cr.wgs_lng1,df_cr.wgs_lat1).name("haversine"))
+      for c in store_df.columns:
+            store_df=store_df.withColumnRenamed(c,c+"_1")
 
 
+      df_cr:DataFrame=store_df.crossJoin(service_df)
+
+      df_ha=df_cr.select(col("*"),haversine(df_cr.lng,df_cr.lat,df_cr.lng_1,df_cr.lat_1).name("haversine"))
+      df_ha.coalesce(1).write.csv(path="e://dataset//yancao//餐饮",header=True)
