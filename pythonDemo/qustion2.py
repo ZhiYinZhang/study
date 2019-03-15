@@ -6,7 +6,7 @@ import os
 # 写入到不同的文件，文件名{type}_{hashId}.txt
 def write_temp(line,type,filePath):
     hashId = hash(line) % 5000
-    temp_file =f"{filePath}//{type}//{type}_{hashId}.txt"
+    temp_file =f"{filePath}//question2//{hashId}.txt"
     if not os.path.exists(temp_file):
         with open(temp_file,'w') as f:
             pass
@@ -16,13 +16,15 @@ def write_temp(line,type,filePath):
 
 #逐行读取文件
 def readOneLine():
-    file = "e://test//checkpoint1//word.txt"
-    hash_file = "e://test//checkpoint1"
+    file = "e://test//checkpoint//word.txt"
+    hash_file = "e://test//checkpoint"
     with open(file,'r') as reader:
-        line = reader.readline()
-        while line:
-            line = reader.readline()
-            write_temp(line, "word", hash_file)
+        lines = reader.readline()
+        write_temp(lines, "word", hash_file)
+        while lines:
+            lines = reader.readlines(16*10000)
+            for line in lines:
+                  write_temp(line, "word", hash_file)
 
 if __name__=="__main__":
     readOneLine()

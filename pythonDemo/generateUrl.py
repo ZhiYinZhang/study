@@ -8,12 +8,13 @@ def generateUrl():
     url = "sparkdocs/latest/structured-streaming-programming-guide.html"
     limit = 100
 
-    fileUrl1 = "e://test//checkpoint1//URL1.txt"
-    fileUrl2 = "e://test//checkpoint1//URL2.txt"
+    fileUrl1 = "e://test//checkpoint//URL1.txt"
+    fileUrl2 = "e://test//checkpoint//URL2.txt"
 
     url1s = []
     url2s = []
-    for x in range(1000):
+    x=0
+    while True:
         for y in range(1000):
             l1 = random.sample(word,4)
             d1 = ''.join(l1)
@@ -27,11 +28,14 @@ def generateUrl():
             url1s.append(url1)
             url2s.append(url2)
         print(x)
+        x+=1
         with open(fileUrl1,"a") as writer1:
             writer1.writelines(url1s)
+            url1s.clear()
 
         with open(fileUrl2,"a") as writer2:
             writer2.writelines(url2s)
+            url2s.clear()
 
         if os.path.getsize(fileUrl1)>1024*1024*1024 and os.path.getsize(fileUrl2)>1024*1024*1024:
             break
@@ -40,7 +44,7 @@ def generateWord():
     word = "qwertyuiopasdfghjklzxcvbnm"
 
     w = "0123456789"
-    file = "e://test//checkpoint1//word.txt"
+    file = "e://test//checkpoint//word.txt"
     ws = []
     while True:
         for y in range(1000):
@@ -57,4 +61,5 @@ def generateWord():
             break
 
 if __name__=="__main__":
-    generateUrl()
+    # generateUrl()
+    generateWord()

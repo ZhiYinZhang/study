@@ -6,6 +6,7 @@
 import pexpect
 import sys
 import re
+#用脚本实现自动登录，根据不同的返回，输入用户名和密码
 
 
 child = pexpect.spawn("ssh 10.18.0.29 'ls' ",logfile=sys.stdout,encoding='utf-8')

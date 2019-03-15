@@ -74,7 +74,7 @@ c=threading.activeCount()
 #     pid=str(i).split(' ').pop()[:-2]
 #     print pid
 
-print (l)
+print(l)
 for i in l:
     if not 'Main' in str(i):
         time.sleep(10)
