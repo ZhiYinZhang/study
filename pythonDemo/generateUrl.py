@@ -44,7 +44,8 @@ def generateWord():
     word = "qwertyuiopasdfghjklzxcvbnm"
 
     w = "0123456789"
-    file = "e://test//checkpoint//word.txt"
+    # file = "e://test//checkpoint//word.txt"
+    file="e://dataset//question//question2//words.txt"
     ws = []
     while True:
         for y in range(1000):
