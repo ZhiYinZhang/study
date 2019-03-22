@@ -11,7 +11,6 @@ import json
 from pyspark.ml.feature import StringIndexer
 from pyspark.sql.types import *
 import os
-
 param = {
     "data_dir": "E:\\test\\csv\\als\\part-00000.csv",
     "result_dir": "/home/zhangzy/dataset/als/result",
@@ -22,7 +21,10 @@ param = {
 }
 
 
+
+
 def string2index(df: DataFrame, inputCol, outputCol):
+    print(f"string2index {inputCol} to {outputCol}")
     stringIndexer = StringIndexer(inputCol=inputCol, outputCol=outputCol)
     model = stringIndexer.fit(df)
     df = model.transform(df)
@@ -30,13 +32,17 @@ def string2index(df: DataFrame, inputCol, outputCol):
 
 
 def create_df():
+    print("create dataFrame")
     spark = SparkSession.builder.appName("als").master("local[3]").getOrCreate()
     # 读取csv文件
-    df = spark.read.csv(param["data_dir"], inferSchema=True, header=True)
+    df = spark.read.csv(param["data_dir"],header=True) \
+        .withColumn(param["itemCol"], col(param["itemCol"]).cast(LongType())) \
+        .withColumn(param["ratingCol"], col(param["ratingCol"]).cast(DoubleType()))
     return df
 
 
 def preprocess(df: DataFrame):
+    print("start preprocess")
     userCol_new = param["userCol"] + "_int"
     param["userCol_new"] = userCol_new
     df_int: DataFrame = string2index(df, param["userCol"], userCol_new)
@@ -44,6 +50,7 @@ def preprocess(df: DataFrame):
 
 
 def get_als_model(df):
+    print("train als model")
     # train
     als = ALS(maxIter=5, regParam=0.01, userCol=param["userCol_new"], itemCol=param["itemCol"],
               ratingCol=param["ratingCol"],
@@ -52,7 +59,8 @@ def get_als_model(df):
     return model
 
 
-def recForAllUser(df: DataFrame, ALSModel):
+def recForAllUser(df: DataFrame, model:ALSModel):
+    print("recommend for all user")
     # Generate top 10 movie recommendations for each user
     userRecs: DataFrame = model.recommendForAllUsers(param.get("top", 10))
     userRecs_pd = userRecs.join(
@@ -64,6 +72,7 @@ def recForAllUser(df: DataFrame, ALSModel):
 
 
 def recForAllItem(df: DataFrame, model: ALSModel):
+    print("recommend for all item")
     # Generate top 10 user recommendations for each item
     itemRecs = model.recommendForAllItems(param.get("top", 10))
 
@@ -113,9 +122,10 @@ if __name__ == "__main__":
     model: ALSModel = get_als_model(train)
 
     result0 = recForAllUser(df_int, model)
+    print(result0)
     # result0.to_json(os.path.join(param["result_dir"],"userRecs.json"),index=False,orient="split")
 
-    result1 = recForAllItem(df_int, model)
+    # result1 = recForAllItem(df_int, model)
     # result1.to_json(os.path.join(param["result_dir"],"itemRecs.json"),index=False,orient="split")
-
-    evaluate(test, model)
+    # print(result1)
+    # evaluate(test, model)
