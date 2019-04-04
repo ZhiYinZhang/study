@@ -9,6 +9,7 @@ spark=SparkSession.builder \
       .appName("structStreaming") \
       .master("local[2]") \
       .getOrCreate()
+
 # spark.sparkContext.setLogLevel("WARN")
 from pyspark.sql.functions import countDistinct
 import json
@@ -98,12 +99,18 @@ if __name__=="__main__":
     "DB2_ZRHYZM_T_TM_MONOPOLY_STD_JOB",
     "DB2_ZRHYZM_STMB_BLACKLIST"]
 
-    df=spark.read.csv("e://test/test1.csv",header=True,inferSchema=True)
+    # df=spark.read.csv("e://test/test1.csv",header=True,inferSchema=True)
+    #
+    # df=df.withColumn("seq",df["seq"].cast("integer"))\
+    #     .withColumn("longitude",df["longitude"].cast("decimal(18,8)"))\
+    #     .withColumn("latitude",df["latitude"].cast("decimal(18,8)"))
+    # df.printSchema()
+    # result=get_info(df)
+    # print(result)
+    # spark.createDataFrame(data=[result]).show()
 
-    df=df.withColumn("seq",df["seq"].cast("integer"))\
-        .withColumn("longitude",df["longitude"].cast("decimal(18,8)"))\
-        .withColumn("latitude",df["latitude"].cast("decimal(18,8)"))
-    df.printSchema()
-    result=get_info(df)
-    print(result)
-    spark.createDataFrame(data=[result]).show()
+    m={"cust_id":"cust_id","license_code":"license_code","manager":"manager","identity_card_id":"identity_card_id",
+       "order_tel":"order_tel","inv_type":"inv_type","order_way":"order_way","periods":"periods",
+       "busi_addr":"busi_addr","work_port":"work_port","base_type":"base_type","sale_scope":"sale_scope",
+       "scope":"scope","com_chara":"com_chara","is_tor_tax":"tor_tax","is_sale_large":"sale_large",
+       "is_rail_cust":"rail_cust","area_type":"area_type","is_sefl_cust":"sefl_cust","is_func_cust":"func_cust"}
