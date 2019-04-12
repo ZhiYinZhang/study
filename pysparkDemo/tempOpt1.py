@@ -5,10 +5,10 @@ from pyspark.sql import SparkSession,DataFrame,Row
 from pyspark.sql.functions import lit,col,sum,min,max
 import time
 
-spark=SparkSession.builder \
-      .appName("structStreaming") \
-      .master("local[2]") \
-      .getOrCreate()
+# spark=SparkSession.builder \
+#       .appName("structStreaming") \
+#       .master("local[2]") \
+#       .getOrCreate()
 
 # spark.sparkContext.setLogLevel("WARN")
 from pyspark.sql.functions import countDistinct
@@ -62,55 +62,24 @@ def get_info(df:DataFrame):
 
     return {"null_ratio":null_ratio,"summary":summary,"value_count":value_count,"dt":dt}
 if __name__=="__main__":
-    # get_lately().show()
-    tables=["DB2_DB2INST1_SGP_CUSTTYPE_ITEM_LIMIT",
-    "DB2_DB2INST1_SGP_CUSTTYPE_ITEM_SPW",
-    "DB2_DB2INST1_SGP_CUSTTYPE_ITEMTYPE_LIMIT",
-    "DB2_DB2INST1_SGP_CUT_STOP_SCHEME",
-    "DB2_DB2INST1_SGP_CUT_STOP_SCHEME_LINE",
-    "DB2_DB2INST1_SGP_ITEM_SPW",
-    "DB2_DB2INST1_SGP_WEEK",
-    "DB2_ZHRYZM_T_I_USER",
-    "DB2_ZHRYZM_T_I_DEPT",
-    "DB2_ZHRYZM_T_LIC_RLIC_INFO",
-    "DB2_ZHRYZM_T_I_CUSTOMER_MARKET",
-    "DB2_ZHRYZM_T_I_CODE_DIRECTORY",
-    "DB2_ZHRYZM_T_I_GRID_LEVEL_THREE",
-    "DB2_ZHRYZM_T_I_GRID_LEVEL_FOUR",
-    "DB2_ZHRYZM_T_I_GRID_LEVEL_FIVE",
-    "DB2_ZHRYZM_T_L_RLIC_APPLY_MAIN",
-    "DB2_ZHRYZM_T_BSC_CODE_TYPE",
-    "DB2_ZHRYZM_T_BSC_CODE_BASE",
-    "DB2_ZRHYZM_T_C_CASEINFO",
-    "DB2_ZRHYZM_T_C_PARTYINFO",
-    "DB2_ZRHYZM_T_C_PARTYINFO_EX",
-    "DB2_ZRHYZM_T_C_CASE_GOODS_DTL",
-    "DB2_ZRHYZM_T_C_CAR",
-    "DB2_ZRHYZM_T_I_DAY_PLAN",
-    "DB2_ZRHYZM_T_I_DAY_PLAN_EXECUTOR",
-    "DB2_ZRHYZM_T_I_CHECK_CLIENT_LIST",
-    "DB2_ZRHYZM_T_I_CLIENT_SIGN",
-    "DB2_ZRHYZM_T_I_CHECK_RESULT",
-    "DB2_ZRHYZM_T_C_TRANS_RESULT",
-    "DB2_ZRHYZM_T_C_CRIMINAL",
-    "DB2_ZRHYZM_T_C_CRIMINAL_DTL",
-    "DB2_ZRHYZM_T_TM_EMPLOYEE_BASE_INFO",
-    "DB2_ZRHYZM_T_TM_MONOPOLY_STD_DEPT",
-    "DB2_ZRHYZM_T_TM_MONOPOLY_STD_JOB",
-    "DB2_ZRHYZM_STMB_BLACKLIST"]
 
-    # df=spark.read.csv("e://test/test1.csv",header=True,inferSchema=True)
-    #
-    # df=df.withColumn("seq",df["seq"].cast("integer"))\
-    #     .withColumn("longitude",df["longitude"].cast("decimal(18,8)"))\
-    #     .withColumn("latitude",df["latitude"].cast("decimal(18,8)"))
-    # df.printSchema()
-    # result=get_info(df)
-    # print(result)
-    # spark.createDataFrame(data=[result]).show()
+            spark: SparkSession = SparkSession.builder\
+                                            .appName("demo")\
+                                            .master("local[3]")\
+                                            .getOrCreate()
 
-    m={"cust_id":"cust_id","license_code":"license_code","manager":"manager","identity_card_id":"identity_card_id",
-       "order_tel":"order_tel","inv_type":"inv_type","order_way":"order_way","periods":"periods",
-       "busi_addr":"busi_addr","work_port":"work_port","base_type":"base_type","sale_scope":"sale_scope",
-       "scope":"scope","com_chara":"com_chara","is_tor_tax":"tor_tax","is_sale_large":"sale_large",
-       "is_rail_cust":"rail_cust","area_type":"area_type","is_sefl_cust":"sefl_cust","is_func_cust":"func_cust"}
+            sc = spark.sparkContext
+            sc.setLogLevel("WARN")
+
+            path = "e://test/temp//order1.csv"
+            df: DataFrame = spark.read\
+                                .option("header", True)\
+                                .option("inferSchema", True)\
+                                .csv(path)
+
+            bd = sc.broadcast(df)
+            df1 = bd.value
+
+
+            df.join(df1).show()
+

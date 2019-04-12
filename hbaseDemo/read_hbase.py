@@ -56,16 +56,24 @@ from  random import randint
 if __name__=="__main__":
     conn=happybase.Connection(host=hbase["host"])
 
-    table=conn.table("member3")
+    table=conn.table("TOBACCO.AREA")
     # table.put(row="encode",data={"column_A:cust_id":"hbase 中的列 与dataFrame中的列对应".encode()})
+
     # for i in range(10):
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
-    # result=table.scan()
-    # for i in result:
-    #      print(i)
+    cols=["price_lyear"]
+    for i in range(len(cols)):
+        col=cols[i].upper()
+        family="0"
+        cols[i]=f"{family}:{col}"
 
-   
+    print(cols)
+    result=table.scan(row_prefix=b"1",columns=cols,limit=100)
+    for i in result:
+         print(i)
+
+
 
 
 
