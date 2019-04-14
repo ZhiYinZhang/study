@@ -130,7 +130,8 @@ co_co_line = spark.sql("select cust_id,item_id,qty_ord,price,born_date from DB2_
     .where(col("month_diff") <= 12)
 
 # ------------------获取plm_item
-plm_item = spark.sql("select item_id,yieldly_type,kind from DB2_DB2INST1_PLM_ITEM").coalesce(5).cache()
+plm_item = spark.sql("select item_id,yieldly_type,kind from DB2_DB2INST1_PLM_ITEM "
+                     "where dt=(select max(dt) from DB2_DB2INST1_PLM_ITEM)").coalesce(5)
 
 line_plm = co_co_line.join(plm_item, "item_id")
 
@@ -303,43 +304,43 @@ last_year = spark.sql("select  cust_id,qty_sum,amt_sum,born_date from DB2_DB2INS
 try:
     # 某零售户上个月订货总量同比变化情况
     # 上个月
-    last_month_order_sum = co_co_01.where(col("month_diff") == 1) \
+    last_month_qty_sum = co_co_01.where(col("month_diff") == 1) \
         .groupBy("cust_id") \
         .agg(sum("qty_sum").alias("qty_sum"))
     # 去年同期
-    last_year_order_sum = last_year.groupBy("cust_id") \
+    last_year_qty_sum = last_year.groupBy("cust_id") \
         .agg(sum("qty_sum").alias("last_year_qty_sum"))
 
     colName="sum_lyear"
     print("某零售户上个月订货总量同比变化情况  ",colName)
-    last_year_order_sum.join(last_month_order_sum, "cust_id") \
+    last_year_qty_sum.join(last_month_qty_sum, "cust_id") \
         .withColumn(colName, period_udf(col("qty_sum"), col("last_year_qty_sum")))\
         .foreachPartition(lambda x: write_hbase1(x, [colName]))
 
     # 某零售户上个月订货总金额同比变化情况
     # 上个月
-    last_month_moy_sum = co_co_01.where(col("month_diff") == 1) \
+    last_month_amt_sum = co_co_01.where(col("month_diff") == 1) \
         .groupBy("cust_id") \
         .agg(sum("amt_sum").alias("amt_sum"))
     # 去年同期
-    last_year_moy_sum = last_year.groupBy("cust_id") \
+    last_year_amt_sum = last_year.groupBy("cust_id") \
         .agg(sum("amt_sum").alias("last_year_amt_sum"))
     colName="amount_lyear"
     print("某零售户上个月订货总金额同比变化情况  ", colName)
-    last_year_moy_sum.join(last_month_moy_sum, "cust_id") \
+    last_year_amt_sum.join(last_month_amt_sum, "cust_id") \
         .withColumn(colName, period_udf(col("amt_sum"), col("last_year_amt_sum")))\
         .foreachPartition(lambda x: write_hbase1(x, [colName]))
 
     # 某零售户上个月订货条均价同比变化情况
     # 上个月
-    last_month_ratio = last_month_order_sum.join(last_month_moy_sum, "cust_id") \
+    last_month_avg_price = last_month_qty_sum.join(last_month_amt_sum, "cust_id") \
         .withColumn("avg_price", divider_udf(col("amt_sum"), col("qty_sum")))
     # 去年同期
-    last_year_ratio = last_year_order_sum.join(last_year_moy_sum, "cust_id") \
+    last_year_avg_price = last_year_qty_sum.join(last_year_amt_sum, "cust_id") \
         .withColumn("last_year_avg_price", divider_udf(col("last_year_amt_sum"), col("last_year_qty_sum")))
     colName="price_lyear"
     print("某零售户上个月订货条均价同比变化情况  ", colName)
-    last_year_ratio.join(last_month_ratio, "cust_id") \
+    last_year_avg_price.join(last_month_avg_price, "cust_id") \
         .withColumn(colName, period_udf(col("avg_price"), col("last_year_avg_price")))\
         .foreachPartition(lambda x: write_hbase1(x, [colName]))
 except Exception as e:
@@ -349,7 +350,7 @@ except Exception as e:
 hbase["table"]="TOBACCO.RETAIL"
 
 
-# -----------------co_cust 零售客户信息表
+# -----------------co_cust 零售客户信息表   全量更新  选取dt最新的数据
 # 需要修改的列名   与hbase的列名对应
 co_cust_retail = {"is_tor_tax": "tor_tax", "is_sale_large": "sale_large",
                   "is_rail_cust": "rail_cust", "is_sefl_cust": "sefl_cust",
@@ -377,7 +378,8 @@ cols = co_cust.columns
 co_cust.foreachPartition(lambda x: write_hbase1(x, cols))
 
 # city county abcode
-co_cust=spark.sql("select cust_id,com_id,sale_center_id,dt from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)").coalesce(5)
+co_cust=spark.sql("select cust_id,com_id,sale_center_id,dt from DB2_DB2INST1_CO_CUST "
+                  "where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)").coalesce(5)
 area_code=spark.read.csv(path="/user/entrobus/zhangzy/区县名称与sale_center_id匹配关系0410+区域编码.csv",header=True)
 co_cust.join(area_code,["com_id","sale_center_id"])\
        .withColumnRenamed("城市","city")\
@@ -386,12 +388,14 @@ co_cust.join(area_code,["com_id","sale_center_id"])\
        .foreachPartition(lambda x: write_hbase1(x, ["abcode","city","county"]))
 
 
-# ----------------crm_cust 零售客户信息表
+# ----------------crm_cust 零售客户信息表   全量更新  选取dt最新的数据
 # 需要修改的列名
 crm_cust_retail = {"crm_longitude": "longitude", "crm_latitude": "latitude",
                    "is_multiple_shop": "multiple_shop", "is_night_shop": "night_shop"}
 crm_cust = spark.sql(
-    "select cust_id,crm_longitude,crm_latitude,is_multiple_shop,org_model,is_night_shop,busi_time_type,consumer_group,consumer_attr,busi_type,compliance_grade from DB2_DB2INST1_CRM_CUST")
+    "select cust_id,crm_longitude,crm_latitude,is_multiple_shop,org_model,is_night_shop,busi_time_type,"
+    "consumer_group,consumer_attr,busi_type,compliance_grade from DB2_DB2INST1_CRM_CUST "
+    "where dt=(select max(dt) from DB2_DB2INST1_CRM_CUST)")
 
 for key in crm_cust_retail.keys():
     crm_cust = crm_cust.withColumnRenamed(key, crm_cust_retail[key])
@@ -453,8 +457,11 @@ def is_match(x, y):
 
 
 isMatch = card_pass = udf(is_match)
-co_cust = spark.sql("select cust_id,identity_card_id,dt from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)").coalesce(5)
-co_debit_acc = spark.sql("select cust_id,pass_id from DB2_DB2INST1_CO_DEBIT_ACC").coalesce(5)
+co_cust = spark.sql("select cust_id,identity_card_id,dt from DB2_DB2INST1_CO_CUST "
+                    "where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)").coalesce(5)
+#co_debit_acc 全量更新
+co_debit_acc = spark.sql("select cust_id,pass_id from DB2_DB2INST1_CO_DEBIT_ACC "
+                         "where dt=(select max(dt) from DB2_DB2INST1_CO_DEBIT_ACC)").coalesce(5)
 co_cust.join(co_debit_acc, "cust_id") \
     .withColumn("license_not_match", isMatch(col("identity_card_id"), col("pass_id"))) \
     .foreachPartition(lambda x: write_hbase1(x, ["license_not_match"]))

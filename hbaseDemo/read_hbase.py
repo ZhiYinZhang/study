@@ -54,25 +54,32 @@ def write_hbase1(rows, cols):
             print(e.args)
 from  random import randint
 if __name__=="__main__":
+    hbase["table"]="coordinate"
+    hbase["familys"]="0"
+    hbase["row"]="sale_center_id"
     conn=happybase.Connection(host=hbase["host"])
-
-    table=conn.table("TOBACCO.AREA")
+    table=conn.table(hbase["table"])
     # table.put(row="encode",data={"column_A:cust_id":"hbase 中的列 与dataFrame中的列对应".encode()})
-
     # for i in range(10):
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
-    cols=["price_lyear"]
+    print(hbase["table"],hbase["familys"],hbase["row"])
+    cols=["price_sub_last_half_year_up500"]
     for i in range(len(cols)):
         col=cols[i].upper()
-        family="0"
+        family=hbase["familys"]
         cols[i]=f"{family}:{col}"
 
     print(cols)
-    result=table.scan(row_prefix=b"1",columns=cols,limit=100)
-    for i in result:
-         print(i)
+    result=table.scan()
 
+    k=[b"address:",b"adname:",b"cityname:",b"name:",b"pname:",b"types:"]
+    for x in result:
+         data=x[1]
+         for y in k:
+             data[y]=data[y].decode()
+
+         print(data)
 
 
 
