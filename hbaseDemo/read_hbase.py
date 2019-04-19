@@ -31,7 +31,6 @@ def write_hbase(rows):
 
 def write_hbase1(rows, cols):
     """
-
     :param rows:  spark的DataFrame以foreachPartition方法  List[Row]
     :param cols:   DataFrame的列，直接以这个列名作为hbase的列名，所以要先将DataFrame的列名改成hbase中的列名
     :return:
@@ -52,36 +51,51 @@ def write_hbase1(rows, cols):
                         batch.put(row=row_key, data=data)
         except Exception as e:
             print(e.args)
+def decode(row,keys:list):
+    """
+
+    :param row: hbase的一行  [rowKey,{}]
+    :param keys: 需要decode的列
+    """
+    data = row[1]
+    for key in keys:
+        data[key] = data[key].decode()
+    return [row[0],data]
+
 from  random import randint
 if __name__=="__main__":
-    hbase["table"]="coordinate"
-    hbase["familys"]="0"
-    hbase["row"]="sale_center_id"
+    tables=["member3","TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING"]
+    hbase["table"]=tables[2]
+    hbase["families"] = "0"
+    # hbase["row"]="sale_center_id"
+    # hbase["families"] = "column_A"
+    # hbase["row"] = "cust_id"
+
     conn=happybase.Connection(host=hbase["host"])
     table=conn.table(hbase["table"])
     # table.put(row="encode",data={"column_A:cust_id":"hbase 中的列 与dataFrame中的列对应".encode()})
     # for i in range(10):
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
-    print(hbase["table"],hbase["familys"],hbase["row"])
-    cols=["price_sub_last_half_year_up500"]
+    print(hbase["table"],hbase["families"])
+    cols=["periods"]
     for i in range(len(cols)):
         col=cols[i].upper()
-        family=hbase["familys"]
+        family=hbase["families"]
         cols[i]=f"{family}:{col}"
 
+
+
     print(cols)
-    result=table.scan()
-
-    k=[b"address:",b"adname:",b"cityname:",b"name:",b"pname:",b"types:"]
-    for x in result:
-         data=x[1]
-         for y in k:
-             data[y]=data[y].decode()
-
-         print(data)
+    rows=table.scan(columns=cols,limit=25000)
+    for row in rows:
+        print(row)
+        # table.delete(row=row[0],columns=["column_A:GDP"])
 
 
-
+    # keys=[b"address:",b"adname:",b"cityname:",b"name:",b"pname:",b"types:"]
+    # keys=[b"0:CITY",b"0:COUNTY"]
+    # for row in rows:
+    #     print(decode(row,keys))
 
 

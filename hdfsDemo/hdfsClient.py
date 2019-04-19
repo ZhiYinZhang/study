@@ -10,9 +10,12 @@ def get_hdfs_client():
 
     :return: client of hdfs
     """
-    hdfs_host = "http://entrobus28:50070"
-    user = "zhangzy"
-    root = "/user"
+    # hdfs_host = "http://entrobus28:50070"
+    # user = "zhangzy"
+    # root = "/user"
+    hdfs_host = "http://10.72.59.90:50070"
+    user="entrobus"
+    root="/user/entrobus"
 
     cli = client.InsecureClient(url=hdfs_host,user=user,root=root)
 
@@ -22,5 +25,5 @@ def get_hdfs_client():
 
 
 if __name__=="__main__":
-
-  pass
+    cli=get_hdfs_client()
+    cli.upload("zhangzy/population","E:\\test\邵阳岳阳株洲人口数据\邵阳岳阳株洲人口数据",True)

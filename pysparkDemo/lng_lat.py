@@ -8,7 +8,7 @@ from pyspark.sql.functions import *
 #根据两个点的经纬度，计算这两个点的球面距离
 def haversine(lng1:Column,lat1:Column,lng2:Column,lat2:Column):
       radius = 6378137
-
+      #将度数转成弧度
       radLng1 = radians(lng1)
       radLat1 = radians(lat1)
       radLng2 = radians(lng2)
