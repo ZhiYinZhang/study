@@ -64,11 +64,14 @@ def decode(row,keys:list):
 
 from  random import randint
 if __name__=="__main__":
-    tables=["member3","TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING"]
-    hbase["table"]=tables[2]
-    hbase["families"] = "0"
-    # hbase["row"]="sale_center_id"
+    tables=["member3","TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING","test_ma"]
+    hbase["table"]=tables[4]
+
+    # hbase["families"] = "0"
     # hbase["families"] = "column_A"
+    hbase["families"]="info"
+
+    hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
 
     conn=happybase.Connection(host=hbase["host"])
@@ -78,7 +81,7 @@ if __name__=="__main__":
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
     print(hbase["table"],hbase["families"])
-    cols=["periods"]
+    cols=["price_last_week"]
     for i in range(len(cols)):
         col=cols[i].upper()
         family=hbase["families"]

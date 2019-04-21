@@ -8,7 +8,7 @@ def period(x,y):
     try:
         x=float(x)
         y=float(y)
-        return (x-y)/y
+        return round((x-y)/y,4)
     except Exception as e:
         print(e.args)
         print(x,y)
@@ -17,7 +17,7 @@ period_udf = udf(period,FloatType())
 
 def divider(x,y):
     try:
-        return x/y
+        return round(float(x)/float(y),4)
     except Exception as e:
         print(e.args)
         print(x,y)
@@ -83,5 +83,4 @@ consume_level_udf=udf(consume_level,FloatType())
 
 
 if __name__=="__main__":
-    print(month_diff(18, 3 , 18, 4))
-    # print(period(str(95.47),str(0.0000)))
+    print(divider("10","20"))
