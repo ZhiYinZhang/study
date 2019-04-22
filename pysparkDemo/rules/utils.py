@@ -2,13 +2,13 @@
 # -*- coding:utf-8 -*-
 # datetime:2019/4/8 16:39
 import math
-from pyspark.sql.types import FloatType
+from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 def period(x,y):
     try:
         x=float(x)
         y=float(y)
-        return round((x-y)/y,4)
+        return round((x-y)/y,6)
     except Exception as e:
         print(e.args)
         print(x,y)
@@ -17,7 +17,7 @@ period_udf = udf(period,FloatType())
 
 def divider(x,y):
     try:
-        return round(float(x)/float(y),4)
+        return round(float(x)/float(y),6)
     except Exception as e:
         print(e.args)
         print(x,y)
@@ -46,6 +46,29 @@ week_diff_udf=udf(week_diff0)
 def week_diff(end,start):
     # date_trunc("week",date) 返回 所属周的周一的日期
     return datediff(date_trunc("week", col(end)), date_trunc("week", col(start))) / 7
+
+
+
+def grade_diff(max1, min1, max2, min2):
+    try:
+        l = sorted([int(max1), int(min1), int(max2), int(min2)])
+        diff = l[3] - l[0]
+        return diff
+    except Exception as e:
+        print(e.args)
+grade_diff_udf = udf(grade_diff,IntegerType())
+
+def box_plots_filter(grade_diff,percent_25,percent_75):
+    iqr=percent_75-percent_25
+    upper=percent_75+1.5*iqr
+    lower=percent_25-1.5*iqr
+    if grade_diff>upper or grade_diff<lower:
+        return 1
+    else:
+        return 0
+box_plots_filter_udf=udf(box_plots_filter)
+
+
 
 #计算一个经纬度为中心，上下相差1km的纬度范围 左右相差1km的经度范围
 #1km

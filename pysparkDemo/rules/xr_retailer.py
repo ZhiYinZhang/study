@@ -2,15 +2,14 @@
 # -*- coding:utf-8 -*-
 # datetime:2019/1/11 14:59
 from pyspark.sql.functions import col
-    # ,to_date,current_date,datediff,udf\
-#     ,desc,row_number,collect_list,date_sub,count,year,month,sum
 from pyspark.sql import functions as f
 from pyspark.sql import SparkSession
 from pyspark import SparkContext
 from datetime import datetime as dt
 from pyspark.sql import Window
 from pysparkDemo.rules.write_hbase import write_hbase1
-from pysparkDemo.rules.utils import divider_udf,period_udf,week_diff,month_diff_udf,lng_l,lng_r,lat_d,lat_u,fill_0_udf,consume_level_udf
+from pysparkDemo.rules.utils import divider_udf,period_udf,week_diff,month_diff_udf,lng_l,lng_r,lat_d,lat_u,fill_0_udf,consume_level_udf, \
+grade_diff_udf
 spark = SparkSession.builder.enableHiveSupport().appName("retail").getOrCreate()
 sc=spark.sparkContext
 sc.setLogLevel("WARN")
@@ -19,9 +18,12 @@ spark.sql("use aistrong")
 
 # ------------------------------------------  retail（零售户分析）表 统计类信息--------------------------------
 hbase={"table":"TOBACCO.RETAIL","families":["0"],"row":"cust_id"}
+hbase={"table":"test_ma","families":["info"],"row":"cust_id"}
+
+
 
 # -----------------------获取co_co_01
-co_co_01 = spark.sql("select  cust_id,qty_sum,amt_sum,born_date from DB2_DB2INST1_CO_CO_01") \
+co_co_01 = spark.sql("select  cust_id,qty_sum,amt_sum,born_date from DB2_DB2INST1_CO_CO_01 where pmt_status=1") \
     .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
     .withColumn("today", f.current_date()) \
     .withColumn("week_diff", week_diff("today","born_date"))\
@@ -46,7 +48,7 @@ for i in range(len(days)):
         price_colName = cols0["price"][i]
         orders_colName = cols0["orders"][i]
 
-        print(f"{day} 订货总量")
+        print(f"{str(dt.now())}  {day} 订货总量")
         if i < 3:
             day_filter = co_co_01.where((col("week_diff") > 0) & (col("week_diff") <= day))
         else:
@@ -58,20 +60,20 @@ for i in range(len(days)):
             .agg(f.sum("qty_sum").alias(sum_colName))
         order_total.foreachPartition(lambda x: write_hbase1(x, [sum_colName],hbase))
 
-        print(f"{day} 订货金额")
+        print(f"{str(dt.now())}  {day} 订货金额")
         # 某零售户上一周/上两周/上四周/上个月的订货金额
         amount_total = day_filter \
             .groupBy("cust_id") \
             .agg(f.sum("amt_sum").alias(amount_colName))
         amount_total.foreachPartition(lambda x: write_hbase1(x, [amount_colName],hbase))
 
-        print(f"{day} 订货条均价")
+        print(f"{str(dt.now())}  {day} 订货条均价")
         # 某零售户上一周/上两周/上四周/上个月的订货条均价
         avg_price = order_total.join(amount_total, "cust_id") \
-            .withColumn(price_colName, f.round(divider_udf(col(amount_colName), col(sum_colName)),4))
+            .withColumn(price_colName, divider_udf(col(amount_colName), col(sum_colName)))
         avg_price.foreachPartition(lambda x: write_hbase1(x, [price_colName],hbase))
 
-        print(f"{day} 订单数")
+        print(f"{str(dt.now())}  {day} 订单数")
         # 某零售户上一周/上两周/上四周/上个月的订单数
         day_filter.groupBy("cust_id") \
             .count() \
@@ -104,25 +106,35 @@ for i in range(len(days)):
         ring_amount_colName = cols0["ring_amount"][i]
         ring_price_colName = cols0["ring_price"][i]
 
-        print(f"{day} 订货总量环比变化情况")
+        print(f"{str(dt.now())}  {day} 订货总量环比变化情况")
         # 某零售户上一周/上两周/上四周/上个月订货总量环比变化情况
         order_ring_ratio = ring_order_total.join(order_total, "cust_id") \
-            .withColumn(ring_sum_colName, f.round(period_udf(col(sum_colName), col("ring_qty_ord")),4))
+            .withColumn(ring_sum_colName, period_udf(col(sum_colName), col("ring_qty_ord")))
         order_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_sum_colName],hbase))
 
-        print(f"{day} 订货总金额环比变化情况")
+        print(f"{str(dt.now())}  {day} 订货总金额环比变化情况")
         # 某零售户上一周/上两周/上四周/上个月订货总金额环比变化情况
         amount_ring_ratio = ring_amount_total.join(amount_total, "cust_id") \
-            .withColumn(ring_amount_colName, f.round(period_udf(col(amount_colName), col("ring_amt_sum")),4))
+            .withColumn(ring_amount_colName, period_udf(col(amount_colName), col("ring_amt_sum")))
         amount_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_amount_colName],hbase))
 
-        print(f"{day} 订货条均价环比变化情况")
+        print(f"{str(dt.now())}  {day} 订货条均价环比变化情况")
         # 某零售户上一周/上两周/上四周/上个月订货条均价环比变化情况
         avg_price_ring_ratio = ring_avg_price.join(avg_price, "cust_id") \
-            .withColumn(ring_price_colName, f.round(period_udf(col(price_colName), col("ring_avg_price")),4))
+            .withColumn(ring_price_colName, period_udf(col(price_colName), col("ring_avg_price")))
         avg_price_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_price_colName],hbase))
 
+del(day_filter)
+del(order_total)
+del(amount_total)
+del(avg_price)
 
+del(ring_order_total)
+del(ring_amount_total)
+del(ring_avg_price)
+del(order_ring_ratio)
+del(amount_ring_ratio)
+del(avg_price_ring_ratio)
 
 # -------------------获取co_co_line
 co_co_line = spark.sql("select cust_id,item_id,qty_ord,price,born_date from DB2_DB2INST1_CO_CO_LINE") \
@@ -218,7 +230,7 @@ for key in days.keys():
             yieldly_type_filter.groupBy("cust_id") \
                 .agg(f.sum("qty_ord").alias("yieldly_type_qty_ord")) \
                 .join(total_df, "cust_id") \
-                .withColumn(colName, f.round(divider_udf(col("yieldly_type_qty_ord"), col("qty_ord")),4)) \
+                .withColumn(colName, divider_udf(col("yieldly_type_qty_ord"), col("qty_ord"))) \
                 .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
             # top 5
@@ -248,13 +260,17 @@ for key in days.keys():
             kind_filter.groupBy("cust_id") \
                 .agg(f.sum("qty_ord").alias("kind_qty_ord")) \
                 .join(total_df, "cust_id") \
-                .withColumn(colName, f.round(divider_udf(col("kind_qty_ord"), col("qty_ord")),4))\
+                .withColumn(colName, divider_udf(col("kind_qty_ord"), col("qty_ord")))\
                 .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
         except Exception as e:
             print(f"error   kind:{kind},day:{day}")
             print(e.args)
 
+del(day_filter)
+del(yieldly_type_filter)
+del(top5)
+del(kind_filter)
 
 
 # 某零售户上1周，上个月，上3个月，上6个月，上12个月所订卷烟价格分段占比
@@ -293,14 +309,28 @@ for key in days.keys():
             price_filter.groupBy("cust_id") \
                     .agg(f.sum("qty_ord").alias("price_qty_ord")) \
                     .join(total_df, "cust_id", "left") \
-                    .withColumn(colName, f.round(divider_udf(col("price_qty_ord"), col("qty_ord")),4)) \
+                    .withColumn(colName, divider_udf(col("price_qty_ord"), col("qty_ord"))) \
                     .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
         except Exception as e:
             print(f"error   price:({price},{prices[i+1]}],{key}:{day}")
             print(e.args)
 
+
+del(day_filter)
+del(price_filter)
+
+
+del(co_co_line)
+del(plm_item)
+del(line_plm)
+del(total_week_1)
+del(filter_this_month)
+del(total_month_1)
+del(total_month_3)
+del(total_month_6)
+del(total_month_12)
 #-------------co_co_01  去年
-last_year = spark.sql("select  cust_id,qty_sum,amt_sum,born_date from DB2_DB2INST1_CO_CO_01") \
+last_year = spark.sql("select  cust_id,qty_sum,amt_sum,born_date from DB2_DB2INST1_CO_CO_01 where pmt_status=1") \
     .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
     .withColumn("last_year_today", f.date_sub(f.current_date(), 365)) \
     .withColumn("month_diff",month_diff_udf(f.year(col("born_date")),f.month(col("born_date")),f.year(col("last_year_today")),f.month(col("last_year_today"))))\
@@ -316,9 +346,9 @@ try:
         .agg(f.sum("qty_sum").alias("last_year_qty_sum"))
 
     colName="sum_lyear"
-    print("某零售户上个月订货总量同比变化情况  ",colName)
+    print(f"{str(dt.now())}  某零售户上个月订货总量同比变化情况  ",colName)
     last_year_qty_sum.join(last_month_qty_sum, "cust_id") \
-        .withColumn(colName, f.round(period_udf(col("qty_sum"), col("last_year_qty_sum")),4))\
+        .withColumn(colName, period_udf(col("qty_sum"), col("last_year_qty_sum")))\
         .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
     # 某零售户上个月订货总金额同比变化情况
@@ -330,9 +360,9 @@ try:
     last_year_amt_sum = last_year.groupBy("cust_id") \
         .agg(f.sum("amt_sum").alias("last_year_amt_sum"))
     colName="amount_lyear"
-    print("某零售户上个月订货总金额同比变化情况  ", colName)
+    print(f"{str(dt.now())}  某零售户上个月订货总金额同比变化情况  ", colName)
     last_year_amt_sum.join(last_month_amt_sum, "cust_id") \
-        .withColumn(colName, f.round(period_udf(col("amt_sum"), col("last_year_amt_sum")),4))\
+        .withColumn(colName, period_udf(col("amt_sum"), col("last_year_amt_sum")))\
         .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
     # 某零售户上个月订货条均价同比变化情况
@@ -343,16 +373,23 @@ try:
     last_year_avg_price = last_year_qty_sum.join(last_year_amt_sum, "cust_id") \
         .withColumn("last_year_avg_price", divider_udf(col("last_year_amt_sum"), col("last_year_qty_sum")))
     colName="price_lyear"
-    print("某零售户上个月订货条均价同比变化情况  ", colName)
+    print(f"{str(dt.now())}  某零售户上个月订货条均价同比变化情况  ", colName)
     last_year_avg_price.join(last_month_avg_price, "cust_id") \
-        .withColumn(colName, f.round(period_udf(col("avg_price"), col("last_year_avg_price")),4))\
+        .withColumn(colName, period_udf(col("avg_price"), col("last_year_avg_price")))\
         .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 except Exception as e:
     print(e.args,colName)
 
-# --------------------------------------------------------retail（零售户信息）基本信息---------------------------------------------
-hbase["table"]="TOBACCO.RETAIL"
 
+del(last_month_qty_sum)
+del(last_year_qty_sum)
+del(last_month_amt_sum)
+del(last_year_amt_sum)
+del(last_month_avg_price)
+del(last_year_avg_price)
+del(co_co_01)
+del(last_year)
+# --------------------------------------------------------retail（零售户信息）基本信息---------------------------------------------
 
 # -----------------co_cust 零售客户信息表
 # 需要修改的列名   与hbase的列名对应
@@ -373,13 +410,11 @@ co_cust = spark.sql("select cust_id,cust_name,cust_seg,status,pay_type,license_c
                     "is_tor_tax,is_sale_large,is_rail_cust,area_type,is_sefl_cust,is_func_cust,dt from DB2_DB2INST1_CO_CUST "
                     "where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04")
 
-
 for key in co_cust_retail.keys():
     co_cust = co_cust.withColumnRenamed(key, co_cust_retail[key])
-
 cols = co_cust.columns
-
 co_cust.foreachPartition(lambda x: write_hbase1(x, cols,hbase))
+
 
 # city county abcode
 co_cust=spark.sql("select cust_id,com_id,sale_center_id,dt from DB2_DB2INST1_CO_CUST "
@@ -390,6 +425,8 @@ co_cust.join(area_code,["com_id","sale_center_id"])\
        .withColumnRenamed("区","county")\
        .withColumnRenamed("sale_center_id","abcode")\
        .foreachPartition(lambda x: write_hbase1(x, ["abcode","city","county"],hbase))
+
+
 
 #网上爬取的经纬度
 city=spark.read.csv(header=True,path="/user/entrobus/zhangzy/long_lat/")\
@@ -402,7 +439,9 @@ city=spark.read.csv(header=True,path="/user/entrobus/zhangzy/long_lat/")\
 co_cust.join(city,"cust_id")\
     .foreachPartition(lambda x:write_hbase1(x,["longitude","latitude"],hbase))
 
-
+del(co_cust)
+del(area_code)
+del(city)
 # ----------------crm_cust 零售客户信息表   全量更新  选取dt最新的数据
 # 需要修改的列名
 crm_cust_retail = {"crm_longitude": "longitude", "crm_latitude": "latitude",
@@ -417,13 +456,17 @@ for key in crm_cust_retail.keys():
 cols = crm_cust.columns
 crm_cust.foreachPartition(lambda x: write_hbase1(x, cols,hbase))
 
+del(crm_cust)
 
 # ----------------crm_cust_log 变更记录表
 crm_cust_log = spark.sql("select cust_id,change_type,change_frm,change_to,audit_date from DB2_DB2INST1_CRM_CUST_LOG") \
     .withColumn("audit_date", f.to_date("audit_date", "yyyyMMdd")) \
     .where(f.datediff(f.current_date(), col("audit_date")) <= 30)
+
 # 档位变更
-cust_seg = crm_cust_log.where(col("change_type") == "CO_CUST.CUST_SEG")
+cust_seg = crm_cust_log.where(col("change_type") == "CO_CUST.CUST_SEG")\
+                       .withColumn("change_frm",f.regexp_replace(col("change_frm"),"(zz)|(ZZ)","31"))\
+                       .withColumn("change_to",f.regexp_replace(col("change_to"),"(zz)|(ZZ)","31"))
 # 前30天档位变更次数
 colName="grade_change_count"
 cust_seg.groupBy("cust_id") \
@@ -432,14 +475,10 @@ cust_seg.groupBy("cust_id") \
 
 
 # 前30天档位变更差
-def diff(max1, min1, max2, min2):
-    l = sorted([int(max1), int(min1), int(max2), int(min2)])
-    diff = l[3] - l[0]
-    return diff
-diff_udf = f.udf(diff)
+
 colName="grade_abs"
 cust_seg.groupBy("cust_id") \
-    .agg(diff_udf(f.max("change_frm"), f.min("change_frm"), f.max("change_to"), f.min("change_to")).alias(colName)) \
+    .agg(grade_diff_udf(f.max("change_frm"), f.min("change_frm"), f.max("change_to"), f.min("change_to")).alias(colName)) \
     .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
 # 30天前档位
@@ -448,7 +487,7 @@ cust_seg.groupBy("cust_id") \
 没有数据的在前端判断，如果这个指标为空，设为现时档位(前端在展示时，这两个是一起读的，所以更方便)
 """
 colName="grade_before"
-grade_before = cust_seg.groupBy("cust_id") \
+cust_seg.groupBy("cust_id") \
     .agg(f.min("audit_date").alias("audit_date")) \
     .join(cust_seg, ["cust_id", "audit_date"]) \
     .withColumnRenamed("change_frm", colName) \
@@ -475,6 +514,9 @@ status_before = status.groupBy("cust_id") \
     .withColumnRenamed("change_frm", colName) \
     .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
+del(crm_cust_log)
+del(cust_seg)
+del(status)
 
 # 是否存在实际经营人与持证人不符
 def is_match(x, y):
@@ -498,7 +540,8 @@ co_cust.join(co_debit_acc, "cust_id") \
 
 
 
-
+del(co_cust)
+del(co_debit_acc)
 
 #零售户周边餐饮消费指数（餐厅，咖啡厅，茶艺馆，甜点店等的数量）
 #零售户周边交通便捷指数（地铁站，公交车站，机场，港口码头数量）
@@ -555,6 +598,11 @@ for x in range(len(cities)):
         count_df.withColumn(colName, f.round(col("count") / count_max * 5, 4)) \
             .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
+del(coordinate)
+del(city)
+del(city0)
+del(count_df)
+
 
 #零售户周边消费水平：每平方米租金、餐饮、酒店价格
 
@@ -577,13 +625,10 @@ cities={"株洲市":"株洲市零售户地址+经纬度+区域编码.csv",
         "岳阳市":"岳阳市零售户地址+经纬度+区域编码.csv"}
 
 
-
-
-
 for x in range(len(cities)):
     key=list(cities.keys())[x]
     path = lng_lat + cities[key]
-    print(key)
+    print(f"{str(dt.now())}  {key}")
     # 某个城市的零售户经纬度
     city = spark.read.csv(header=True, path=path) \
         .select("cust_id", "longitude", "latitude") \
@@ -598,7 +643,7 @@ for x in range(len(cities)):
         .withColumn("lat_u", lat_u(col("latitude")))
 
     # -------------租金
-    print("rent")
+    print(f"{str(dt.now())}  rent")
     path = rent_food_hotel + poi["rent"]
     rent = spark.read.csv(header=True, path=path) \
         .withColumn("lng", col("longitude").cast("float")) \
@@ -614,7 +659,7 @@ for x in range(len(cities)):
 
 
     # --------------餐饮
-    print("food")
+    print(f"{str(dt.now())}  food")
     path = rent_food_hotel + poi["food"]
     food = spark.read.csv(header=True, path=path) \
         .withColumn("lng", col("jingdu").cast("float")) \
@@ -628,7 +673,7 @@ for x in range(len(cities)):
     city_food_avg = city_food_avg.withColumn("food_25", f.lit(food_25))
 
     # --------------酒店
-    print("hotel")
+    print(f"{str(dt.now())}  hotel")
     path = rent_food_hotel + poi["hotel"]
     hotel = spark.read.csv(header=True, path=path) \
         .withColumn("lng", col("jingdu").cast("float")) \
@@ -643,13 +688,26 @@ for x in range(len(cities)):
 
 
     #result
-    print("consume level")
+    print(f"{str(dt.now())}   consume level")
     consume_level_df=city_rent_avg.join(city_food_avg, "cust_id")\
         .join(city_hotel_avg, "cust_id")\
         .withColumn("consume_level",consume_level_udf(col("rent_avg"), col("food_avg"),col("hotel_avg"), col("rent_25"), col("food_25"),col("hotel_25")))
 
     max_consume_level = consume_level_df.select(f.max("consume_level")).head()["max(consume_level)"]
     colName="catering_cons_avg"
-    print("consume level index")
+    print(f"{str(dt.now())}   consume level index")
     consume_level_df.withColumn(colName, f.round(col("consume_level") / max_consume_level*5, 4)) \
         .foreachPartition(lambda x: write_hbase1(x, [colName]),hbase)
+
+del(city)
+del(city0)
+del(rent)
+del(city_rent)
+del(city_rent_avg)
+del(food)
+del(city_food)
+del(city_food_avg)
+del(hotel)
+del(city_hotel)
+del(city_hotel_avg)
+del(consume_level_df)

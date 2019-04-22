@@ -81,7 +81,7 @@ if __name__=="__main__":
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
     print(hbase["table"],hbase["families"])
-    cols=["price_last_week"]
+    cols=["price_ratio_last_week_1"]
     for i in range(len(cols)):
         col=cols[i].upper()
         family=hbase["families"]
@@ -90,7 +90,7 @@ if __name__=="__main__":
 
 
     print(cols)
-    rows=table.scan(columns=cols,limit=25000)
+    rows=table.scan(columns=cols,limit=1000)
     for row in rows:
         print(row)
         # table.delete(row=row[0],columns=["column_A:GDP"])
