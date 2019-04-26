@@ -64,6 +64,8 @@ def get_info(df:DataFrame):
 if __name__=="__main__":
 
             spark: SparkSession = SparkSession.builder\
+                                            .config("spark.driver.extraClassPath=E:\mysql-connector-java-5.1.6.jar")\
+                                            .config("spark.executor.extraClassPath=E:\mysql-connector-java-5.1.6.jar")\
                                             .appName("demo")\
                                             .master("local[3]")\
                                             .getOrCreate()
@@ -71,15 +73,9 @@ if __name__=="__main__":
             sc = spark.sparkContext
             sc.setLogLevel("WARN")
 
-            path = "e://test/temp//order1.csv"
-            df: DataFrame = spark.read\
-                                .option("header", True)\
-                                .option("inferSchema", True)\
-                                .csv(path)
-
-            bd = sc.broadcast(df)
-            df1 = bd.value
-
-
-            df.join(df1).show()
-
+            url="jdbc:mysql://localhost:3306/entrobus"
+            # dbtable="qm_task_amount"
+            # prop={"driver":"com.mysql.jdbc.Driver","user":"root","password":"123456"}
+            df=spark.read.format("jdbc").options(url=url,driver="com.mysql.jdbc.Driver"
+                                  ,dbtable="qm_task_amount",user="root",password="123456").load()
+            df.show()

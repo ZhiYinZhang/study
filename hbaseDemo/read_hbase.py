@@ -51,54 +51,91 @@ def write_hbase1(rows, cols):
                         batch.put(row=row_key, data=data)
         except Exception as e:
             print(e.args)
-def decode(row,keys:list):
+def decode(row,family,cols:list,upper_case=False):
     """
 
     :param row: hbase的一行  [rowKey,{}]
     :param keys: 需要decode的列
     """
+    if upper_case:
+        # 转为大写
+        for i in range(len(cols)):
+            col = cols[i].upper()
+            cols[i] = bytes(f"{family}:{col}",encoding="utf-8")
+
     data = row[1]
-    for key in keys:
+    for key in cols:
         data[key] = data[key].decode()
     return [row[0],data]
+
+def get(table_name,family,cols:list,upper_case=False,limit=100):
+    conn = happybase.Connection(host=hbase["host"])
+    table = conn.table(table_name)
+
+    print(table_name, family)
+
+    if upper_case:
+        # 转为大写
+        for i in range(len(cols)):
+            col = cols[i].upper()
+            cols[i] = f"{family}:{col}"
+
+    print(cols)
+    rows = table.scan(columns=cols, limit=limit)
+
+    return rows
+
+def delete(table_name,family,cols:list,upper_case=False):
+    conn = happybase.Connection(host=hbase["host"])
+    table = conn.table(table_name)
+
+    print(table_name, family)
+
+    if upper_case:
+        # 转为大写
+        for i in range(len(cols)):
+            col = cols[i].upper()
+            cols[i] = f"{family}:{col}"
+
+    print(cols)
+
+    rows = table.scan(columns=cols)
+
+    with table.batch(batch_size=500) as batch:
+            for row in rows:
+                print(row[0],row[1])
+                batch.delete(row[0],cols)
+
 
 from  random import randint
 if __name__=="__main__":
     tables=["member3","TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING","test_ma"]
-    hbase["table"]=tables[4]
+    hbase["table"]=tables[3]
 
-    # hbase["families"] = "0"
+    hbase["families"] = "0"
     # hbase["families"] = "column_A"
-    hbase["families"]="info"
+    # hbase["families"]="info"
 
     hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
 
     conn=happybase.Connection(host=hbase["host"])
     table=conn.table(hbase["table"])
+
+
+
     # table.put(row="encode",data={"column_A:cust_id":"hbase 中的列 与dataFrame中的列对应".encode()})
     # for i in range(10):
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
-    print(hbase["table"],hbase["families"])
-    cols=["price_ratio_last_week_1"]
-    for i in range(len(cols)):
-        col=cols[i].upper()
-        family=hbase["families"]
-        cols[i]=f"{family}:{col}"
-
-
-
-    print(cols)
-    rows=table.scan(columns=cols,limit=1000)
+    cols = ["grade_out_prov"]
+    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True)
     for row in rows:
-        print(row)
-        # table.delete(row=row[0],columns=["column_A:GDP"])
+            print(row)
+            # print(decode(row,family=hbase["families"],cols=["cust_name"],upper_case=True))
 
 
-    # keys=[b"address:",b"adname:",b"cityname:",b"name:",b"pname:",b"types:"]
-    # keys=[b"0:CITY",b"0:COUNTY"]
-    # for row in rows:
-    #     print(decode(row,keys))
 
 
+    # cols=["longitude","latitude"]
+    # delete(table_name=hbase["table"],family=hbase["families"],cols=cols,upper_case=True)

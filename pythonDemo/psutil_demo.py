@@ -7,6 +7,7 @@
 import psutil
 import os
 import time
+import gc
 #获取本机资源信息
 print(psutil.cpu_count())
 print(psutil.disk_partitions())
@@ -17,4 +18,5 @@ process=psutil.Process(os.getpid())
 print(process.memory_info())
 
 
-
+print(gc.get_threshold())
+gc.collect()

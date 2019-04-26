@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
-# datetime:2019/1/11 14:59
-from sqlalchemy import create_engine
-import pandas as pd
-import pymysql
-from datetime import datetime as dt
-# user="root"
-# passwd="ouhao#18"
-# host="120.78.127.137"
-# port='3306'
-# db_name="ouhaodw"
+# datetime:2019/4/24 15:38
 
-user="root"
-passwd="123456"
-host="localhost"
-port='3306'
-db_name="entrobus"
-engine=create_engine(f"mysql+pymysql://{user}:{passwd}@{host}:{port}/{db_name}")
-
-tables={
-        "昊居签约数据":"hj_subscription_data",
-        "昊居任务额":"hj_task_amount",
-        "昊居回款额":"hj_collection_amount",
-        "昊居应收账款":"hj_accounts_receivable",
-        "昊居类型收入利润":"hj_income_profit",
-        "昊居项目净利润":"hj_project_profit",
-        "昊居区域利润":"hj_region_profit",
-        "昊居利率偏差":"hj_profit_deviation"
+mysql_opt={
+"user":"root",
+"passwd":"ouhao#18",
+"host":"120.78.127.137",
+"port":"3306",
+"db_name":"ouhaodw"
+}
+# mysql_opt={
+# "user":"root",
+# "passwd":"123456",
+# "host":"localhost",
+# "port":"3306",
+# "db_name":"entrobus"
+# }
+# excel表 : mysql表
+hj_tables={
+        # "昊居签约数据":"hj_subscription_data",
+        # "昊居任务额":"hj_task_amount",
+        # "昊居回款额":"hj_collection_amount",
+        # "昊居应收账款":"hj_accounts_receivable",
+        # "昊居类型收入利润":"hj_income_profit",
+        # "昊居项目净利润":"hj_project_profit",
+        # "昊居区域利润":"hj_region_profit",
+        # "昊居利率偏差":"hj_profit_deviation"
        }
-cols={
+#excel表中列名 : mysql表列名
+hj_cols={
 "昊居签约数据":{'年份':'year','归属月份':'month','合同编码':'contract_id','合同名称':'contract_name','合同内容摘要':'contract_abstract',
                         '合同类型':'contract_type','对方单位/客户名称':'second_party','我方签订合同公司':'first_party','合同金额':'contract_amount',
                         '合同减免/折扣':'contract_discount','其他增减项':'other_discount','实际合同金额':'reality_amount','合同签订日期':'contract_date',
@@ -50,37 +50,10 @@ cols={
 "昊居利率偏差":{'年份':'year','月份':'month','类型':'type','累计利率':'accumulation_rate','目标利率':'target_rate','偏差':'deviation','更新时间':'update_time'}
 }
 
-path="e://test//昊居数据库字段(6).xlsx"
-# path="e://test//千摩销售目标及回款2019(1).xlsx"
 
-
-def excel_to_mysql(file,tables,cols):
-    #excel 表
-    excel_tables=list(tables.keys())
-
-    update_time = str(dt.now().date())
-
-    for excel_table in excel_tables:
-        # excel_table = "昊居签约数据"
-
-        print(f"read {excel_table}")
-        df = pd.read_excel(io=file, sheet_name=excel_table)
-        #插入更新时间
-        df["更新时间"] = update_time
-
-        # 修改列名
-        renames = cols[excel_table]
-        df: pd.DataFrame = df.rename_axis(mapper=renames, axis=1)
-
-        df = df.replace("\s+-\s+", "", regex=True)
-
-
-        sql_table = tables[excel_table]
-        print(f"write {sql_table}")
-        df.to_sql(name=sql_table,con=engine,index=False,if_exists="replace")
-
-import os
-if __name__=="__main__":
-       pass
-
-
+qm_tables={
+    "各主体数据汇总更新":"qm_task_amount"
+}
+qm_cols={
+    "各主体数据汇总更新":{"月份":"time","销售":"sale","回款":"received"}
+}

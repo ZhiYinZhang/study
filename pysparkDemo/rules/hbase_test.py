@@ -7,13 +7,9 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as f
 import psutil
 import time
-print(psutil.virtual_memory())
-spark = SparkSession.builder.enableHiveSupport().appName("area").getOrCreate()
-df=spark.range(100000).withColumn("index",f.col("id"))
-print(psutil.virtual_memory())
-# df.show()
-# del(df)
-for col in df.columns:
-    df.drop(col)
-time.sleep(10)
-print(psutil.virtual_memory())
+import traceback as tb
+try:
+    1/0
+except Exception as e:
+    tb.print_exc()
+print(1)

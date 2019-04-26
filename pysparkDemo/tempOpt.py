@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # datetime:2019/1/11 13:12
-import math
-
-def lng_l_r(lng,lat):
-      lng_r=lng+1/(111.11*math.cos(lat))
-      lng_l=lng-1/(111.11*math.cos(lat))
-      return (lng_l,lng_r)
-def lat_d_u(lat):
-      lat_u=lat+1/111.11
-      lat_d=lat-1/111.11
-      return (lat_d,lat_u)
-
+from pyspark.sql import SparkSession,DataFrame,Row
+from pyspark.sql import functions as f
+from pyspark.sql.functions import col
+from pyspark import StorageLevel
+import time
+from datetime import datetime as dt
 if __name__=="__main__":
-     # for i in range(361):
-     #       print(i)
-     #       lng=lng_l_r(i,10)
-     #
-     #       if(lng[0]>lng[1]):
-     #             print(lng)
+    spark: SparkSession = SparkSession.builder \
+        .config("spark.driver.extraClassPath=E:\mysql-connector-java-5.1.6.jar") \
+        .config("spark.executor.extraClassPath=E:\mysql-connector-java-5.1.6.jar") \
+        .appName("demo") \
+        .master("local[3]") \
+        .getOrCreate()
 
+    sc = spark.sparkContext
+    sc.setLogLevel("WARN")
 
-     for i in range(0,361,10):
-           print(i,math.cos(i))
+    df = spark.range(100000000).withColumn("value", f.when(col("id") % 3 == 0, 3).when(col("id") % 5 == 0, 5).when(
+        col("id") % 7 == 0, 7).otherwise(1)).persist()
 
+    print(str(dt.now()))
 
+    df.count()
+    mean = df.groupBy("value").agg(f.mean("id").alias("mean"))
+    mean.show()
+    stddev = df.groupBy("value").agg(f.stddev_pop("id").alias("stddev"))
+    stddev.show()
+    var = df.groupBy("value").agg(f.var_pop("id").alias("var"))
+    var.show()
+
+    print(str(dt.now()))
