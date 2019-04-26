@@ -85,10 +85,12 @@ def box_plots_filter(grade_diff,percent_25,percent_75):
     iqr=percent_75-percent_25
     upper=percent_75+1.5*iqr
     lower=percent_25-1.5*iqr
-    if grade_diff>upper or grade_diff<lower:
+    if grade_diff>upper:
         return 1
-    else:
+    elif grade_diff<lower:
         return 0
+    else:
+        return -1
 box_plots_filter_udf=udf(box_plots_filter)
 
 
@@ -132,10 +134,12 @@ consume_level_udf=udf(consume_level,FloatType())
 
 def abnormal_range(value,upper,lower):
     try:
-        if value>upper or value<lower:
+        if value>upper:
             return 1
-        else:
+        elif value < lower:
             return 0
+        else:
+            return -1
     except Exception:
         return -1
 
@@ -170,7 +174,7 @@ def is_except(df,cols:dict):
         .withColumnRenamed("mean+3std", mean_plus_3std) \
         .withColumnRenamed("mean-3std", mean_minus_3std) \
         .withColumnRenamed("mean",mean)\
-        .where(col(abnormal) == 1)
+        .where(col(abnormal) >= 0)
 
     return result
 

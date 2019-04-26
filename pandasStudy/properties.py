@@ -20,7 +20,7 @@ mysql_opt={
 hj_tables={
         # "昊居签约数据":"hj_subscription_data",
         # "昊居任务额":"hj_task_amount",
-        # "昊居回款额":"hj_collection_amount",
+        "昊居回款额":"hj_collection_amount",
         # "昊居应收账款":"hj_accounts_receivable",
         # "昊居类型收入利润":"hj_income_profit",
         # "昊居项目净利润":"hj_project_profit",

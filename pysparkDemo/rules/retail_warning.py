@@ -91,47 +91,116 @@ def is_match(x, y):
 
 
 isMatch = card_pass = f.udf(is_match)
-#co_cust 全量更新
-co_cust = spark.sql("select cust_id,identity_card_id,order_tel from DB2_DB2INST1_CO_CUST "
-                    "where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04").coalesce(5)
-#co_debit_acc 全量更新
-co_debit_acc = spark.sql("select cust_id,pass_id,acc from DB2_DB2INST1_CO_DEBIT_ACC "
-                         "where dt=(select max(dt) from DB2_DB2INST1_CO_DEBIT_ACC) and status=1").coalesce(5)
-colName="license_not_match"
-co_cust.join(co_debit_acc, "cust_id") \
-    .withColumn(colName, isMatch(col("identity_card_id"), col("pass_id"))) \
-    .where(col(colName)=="1")\
-    .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
-
-#-----每个身份证对应 多零售户id
-card_filter=co_cust.where(col("identity_card_id").rlike("(\w{15,})"))
-card_num=card_filter.groupBy("identity_card_id")\
-                .agg(f.count("cust_id").alias("cust_num"))\
-                .where(col("cust_num")>1)
-colName="one_id_more_retail"
-card_filter.join(card_num,"identity_card_id")\
-       .withColumn(colName,f.lit("1"))\
+try:
+    #co_cust 全量更新
+    co_cust = spark.sql("select cust_id,identity_card_id,order_tel from DB2_DB2INST1_CO_CUST "
+                        "where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04").coalesce(5)
+    #co_debit_acc 全量更新
+    co_debit_acc = spark.sql("select cust_id,pass_id,acc from DB2_DB2INST1_CO_DEBIT_ACC "
+                             "where dt=(select max(dt) from DB2_DB2INST1_CO_DEBIT_ACC) and status=1").coalesce(5)
+    colName="license_not_match"
+    co_cust.join(co_debit_acc, "cust_id") \
+        .withColumn(colName, isMatch(col("identity_card_id"), col("pass_id"))) \
+        .where(col(colName)=="1")\
         .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
 
-#-----每个电话对应 多零售户id
-tel_filter=co_cust.where(col("order_tel").rlike("[^(NULL)]"))
-cust_num=tel_filter.groupBy("order_tel")\
-                .agg(f.count("cust_id").alias("cust_num"))\
-                .where(col("cust_num")>1)
-colName="one_tel_more_retail"
-tel_filter.join(cust_num,"order_tel")\
-       .withColumn(colName,f.lit("1"))\
-        .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
+    # -----每个身份证对应 多零售户id
+    try:
+        print(f"{str(dt.now())}  每个身份证对应 多零售户id")
+        card_filter=co_cust.where(col("identity_card_id").rlike("(\w{15,})"))
+        cust_num=card_filter.groupBy("identity_card_id")\
+                        .agg(f.count("cust_id").alias("cust_num"))\
+                        .where(col("cust_num")>1)
+        colName="one_id_more_retail"
+        card_filter.join(cust_num,"identity_card_id")\
+               .withColumn(colName,f.lit("1"))\
+                .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
+    except Exception as e:
+        tb.print_exc()
 
-#-----一个银行账号对应多个零售户
-cust_num=co_debit_acc.groupBy("acc")\
-            .agg(f.count("cust_id").alias("cust_num"))\
-            .where(col("cust_num")>1)
-colName="one_bank_more_retail"
-co_debit_acc.join(cust_num,"acc")\
-            .withColumn(colName,f.lit("1"))\
-            .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
+
+    #-----每个电话对应 多零售户id
+    try:
+        print(f"{str(dt.now())}  每个电话对应 多零售户id")
+        tel_filter=co_cust.where(col("order_tel").rlike("[^(NULL)]"))
+        cust_num=tel_filter.groupBy("order_tel")\
+                        .agg(f.count("cust_id").alias("cust_num"))\
+                        .where(col("cust_num")>1)
+        colName="one_tel_more_retail"
+        tel_filter.join(cust_num,"order_tel")\
+               .withColumn(colName,f.lit("1"))\
+                .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
+    except Exception as e:
+        tb.print_exc()
+
+
+    #-----一个银行账号对应多个零售户
+    try:
+        print(f"{str(dt.now())}  一个银行账号对应多个零售户 多零售户id")
+        cust_num=co_debit_acc.groupBy("acc")\
+                    .agg(f.count("cust_id").alias("cust_num"))\
+                    .where(col("cust_num")>1)
+        colName="one_bank_more_retail"
+        co_debit_acc.join(cust_num,"acc")\
+                    .withColumn(colName,f.lit("1"))\
+                    .foreachPartition(lambda x: write_hbase1(x, [colName],hbase))
+    except Exception as e:
+        tb.print_exc()
+
+except Exception as e:
+    tb.print_exc()
+
+
+#-----近一个月内一订货IP地址多零售店ID
+try:
+    print(f"{str(dt.now())}  近一个月内一订货IP地址多零售店ID")
+    co_log=spark.sql("select log_seq,ip_addr,dt,log_status,log_date from DB2_DB2INST1_CO_LOG where log_status='02'")\
+                      .where(col("ip_addr").rlike("[^(NULL)\s]"))\
+                      .withColumn("log_date",f.to_date(col("log_date"),"yyyyMMdd"))\
+                      .withColumn("today",f.current_date())\
+                      .withColumn("day_diff",f.datediff(col("today"),col("log_date")))\
+                      .where(col("day_diff")<=30)
+    co_log_line=spark.sql("select log_seq,co_num,pmt_status,update_time,dt from DB2_DB2INST1_CO_LOG_LINE where pmt_status='1'")\
+                          .withColumn("update_time",f.to_date(col("update_time"),"yyyy-MM-dd HH:mm:ss"))\
+                          .withColumn("today",f.current_date())\
+                          .withColumn("day_diff",f.datediff(col("today"),col("update_time")))\
+                          .where(col("day_diff")<=30)
+    co_co_line = spark.sql("select  cust_id,co_num,born_date,price from DB2_DB2INST1_CO_CO_LINE") \
+            .dropDuplicates(["co_num"])\
+            .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
+            .withColumn("today", f.current_date()) \
+            .withColumn("day_diff",f.datediff(col("today"),col("born_date")))\
+            .where(col("day_diff") <= 30)
+
+
+    ip_addr="order_ip_addr"
+    cust_ip=co_log.join(co_log_line,"log_seq")\
+           .join(co_co_line,"co_num")\
+           .select("cust_id","ip_addr")
+    colName="one_ip_more_retail"
+    cust_ip.groupBy("ip_addr")\
+           .agg(f.count("cust_id").alias("cust_num"))\
+           .where(col("cust_num")>1)\
+            .join(cust_ip,"ip_addr") \
+            .withColumnRenamed("ip_addr", ip_addr)\
+            .withColumn(colName,f.lit(1))\
+            .foreachPartition(lambda x:write_hbase1(x,[colName,ip_addr],hbase))
+except Exception as e:
+    tb.print_exc()
+try:
+    del (co_cust)
+    del (co_debit_acc)
+    del (card_filter)
+    del (tel_filter)
+    del (cust_num)
+    del (co_log)
+    del (co_log_line)
+    del (co_co_line)
+    del (cust_ip)
+except Exception as e:
+    tb.print_exc()
+
 
 
 
@@ -158,7 +227,7 @@ try:
     result=spark.sql("select com_id,percentile_approx(grade_diff,0.25) as percent_25,percentile_approx(grade_diff,0.75) as percent_75 from grade_diff_df group by com_id")\
             .join(grade_diff_df,"com_id")\
             .withColumn(colName,box_plots_filter_udf(col("grade_diff"),col("percent_25"),col("percent_75")))\
-            .where(col(colName)==1)
+            .where(col(colName)>=0)
     result.foreachPartition(lambda x:write_hbase1(x,[colName],hbase))
 
 

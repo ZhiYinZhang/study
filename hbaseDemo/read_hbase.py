@@ -128,8 +128,8 @@ if __name__=="__main__":
     # for i in range(10):
     #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
-    cols = ["grade_out_prov"]
-    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True)
+    cols = ["grade_abno"]
+    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
     for row in rows:
             print(row)
             # print(decode(row,family=hbase["families"],cols=["cust_name"],upper_case=True))
@@ -137,5 +137,5 @@ if __name__=="__main__":
 
 
 
-    # cols=["longitude","latitude"]
+    # cols=["order_ip_addr"]
     # delete(table_name=hbase["table"],family=hbase["families"],cols=cols,upper_case=True)

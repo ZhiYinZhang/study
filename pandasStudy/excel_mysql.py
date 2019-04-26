@@ -35,7 +35,8 @@ def excel_to_mysql(file,tables,cols):
     #excel 表
     excel_tables=list(tables.keys())
 
-    update_time = str(dt.now().date())
+    update_time = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+    # update_time="2019-04-26 18:08:05"
 
     for excel_table in excel_tables:
         try:
@@ -62,7 +63,7 @@ def excel_to_mysql(file,tables,cols):
             sql_table = tables[excel_table]
             print(f"write {sql_table}")
 
-            # print(df["refund_reason"])
+
             # print(df)
             df.to_sql(name=sql_table,con=engine,index=False,if_exists="append")
         except Exception as e:
