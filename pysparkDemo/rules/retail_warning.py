@@ -177,7 +177,8 @@ try:
     ip_addr="order_ip_addr"
     cust_ip=co_log.join(co_log_line,"log_seq")\
            .join(co_co_line,"co_num")\
-           .select("cust_id","ip_addr")
+           .select("cust_id","ip_addr")\
+           .dropDuplicates(["cust_id","ip_addr"])
     colName="one_ip_more_retail"
     cust_ip.groupBy("ip_addr")\
            .agg(f.count("cust_id").alias("cust_num"))\

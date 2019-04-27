@@ -3,8 +3,7 @@
 # datetime:2019/4/1 16:43
 import happybase
 from happybase import Table
-import happybase
-from happybase import Table
+from datetime import datetime as dt
 hbase={"host":"10.72.32.26","size":10,"table":"member3",
        "row":"cust_id",
        "familys":["column_A","column_B"],  #本次要写的列族
@@ -110,11 +109,11 @@ def delete(table_name,family,cols:list,upper_case=False):
 from  random import randint
 if __name__=="__main__":
     tables=["member3","TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING","test_ma"]
-    hbase["table"]=tables[3]
+    hbase["table"]=tables[4]
 
-    hbase["families"] = "0"
+    # hbase["families"] = "0"
     # hbase["families"] = "column_A"
-    # hbase["families"]="info"
+    hbase["families"]="info"
 
     hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
@@ -122,16 +121,19 @@ if __name__=="__main__":
     conn=happybase.Connection(host=hbase["host"])
     table=conn.table(hbase["table"])
 
+    # conn.create_table("test0",{"info":dict()})
+    print(str(dt.now()))
+    with table.batch(batch_size=5000) as batch:
+        for i in range(100000):
+            batch.put(row=f"{i}",data={"info:ONE_IP_MORE_RETAIL":f"{randint(0,100000)}","info:ORDER_IP_ADDR":"114.114.114.114"})
+    print(str(dt.now()))
 
 
-    # table.put(row="encode",data={"column_A:cust_id":"hbase 中的列 与dataFrame中的列对应".encode()})
-    # for i in range(10):
-    #    table.put(row=f"{i}",data={"0:LICENSE_CODE":f"{randint(0,1000)}"})
 
-    cols = ["grade_abno"]
-    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
-    for row in rows:
-            print(row)
+    # cols = ["one_ip_more_retail","order_ip_addr"]
+    # rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
+    # for row in rows:
+    #         print(row)
             # print(decode(row,family=hbase["families"],cols=["cust_name"],upper_case=True))
 
 
