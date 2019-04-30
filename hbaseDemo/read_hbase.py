@@ -85,35 +85,47 @@ def get(table_name,family,cols:list,upper_case=False,limit=100):
     return rows
 
 def delete(table_name,family,cols:list,upper_case=False):
-    conn = happybase.Connection(host=hbase["host"])
-    table = conn.table(table_name)
+    pool = happybase.ConnectionPool(host=hbase["host"], size=hbase["size"])
+    with pool.connection() as conn:
+        table = conn.table(table_name)
 
-    print(table_name, family)
+        print(table_name, family)
 
-    if upper_case:
-        # 转为大写
-        for i in range(len(cols)):
-            col = cols[i].upper()
-            cols[i] = f"{family}:{col}"
+        if upper_case:
+            # 转为大写
+            for i in range(len(cols)):
+                col = cols[i].upper()
+                cols[i] = f"{family}:{col}"
 
-    print(cols)
+        print(cols)
 
-    rows = table.scan(columns=cols)
+        rows = table.scan(columns=cols)
+        with table.batch(batch_size=10000) as batch:
+                i=0
+                for row in rows:
+                    # print(row[0],row[1])
+                    batch.delete(row[0],cols)
 
-    with table.batch(batch_size=500) as batch:
+def delete_all(table_name):
+    pool = happybase.ConnectionPool(host=hbase["host"], size=hbase["size"])
+    with pool.connection() as conn:
+        table = conn.table(table_name)
+
+        print(table_name)
+        rows = table.scan()
+        with table.batch(batch_size=10000) as batch:
             for row in rows:
-                print(row[0],row[1])
-                batch.delete(row[0],cols)
-
-
+                # print(row[0],row[1])
+                batch.delete(row[0])
 from  random import randint
 if __name__=="__main__":
-    tables=["member3","TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING","test_ma"]
+    tables=["member3","test_ma",
+            "TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING"]
     hbase["table"]=tables[4]
 
-    # hbase["families"] = "0"
+    hbase["families"] = "0"
     # hbase["families"] = "column_A"
-    hbase["families"]="info"
+    # hbase["families"]="info"
 
     hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
@@ -122,22 +134,30 @@ if __name__=="__main__":
     table=conn.table(hbase["table"])
 
     # conn.create_table("test0",{"info":dict()})
-    print(str(dt.now()))
-    with table.batch(batch_size=5000) as batch:
-        for i in range(100000):
-            batch.put(row=f"{i}",data={"info:ONE_IP_MORE_RETAIL":f"{randint(0,100000)}","info:ORDER_IP_ADDR":"114.114.114.114"})
-    print(str(dt.now()))
+    # print(str(dt.now()))
+    # with table.batch(batch_size=50000) as batch:
+    #     for i in range(000000,500000):
+    #         batch.put(row=f"{i}",data={"info:UID":f"{randint(0,100000)}","info:ADDRESS":"114.114.114.114"})
+    # print(str(dt.now()))
 
 
 
-    # cols = ["one_ip_more_retail","order_ip_addr"]
-    # rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
-    # for row in rows:
-    #         print(row)
-            # print(decode(row,family=hbase["families"],cols=["cust_name"],upper_case=True))
+    cols = ["regulation_abno","ciga_top3_last_month","ciga_top3_km"]
+    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
+    for row in rows:
+            # print(row)
+            print(decode(row,family=hbase["families"],cols=["ciga_top3_last_month","ciga_top3_km"],upper_case=True))
 
 
 
 
-    # cols=["order_ip_addr"]
+
+    # print(str(dt.now()))
+    # cols=[]
     # delete(table_name=hbase["table"],family=hbase["families"],cols=cols,upper_case=True)
+    # print(str(dt.now()))
+
+
+    # print(str(dt.now()))
+    # delete_all(hbase["table"])
+    # print(str(dt.now()))

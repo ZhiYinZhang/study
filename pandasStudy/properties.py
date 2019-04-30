@@ -2,30 +2,33 @@
 # -*- coding:utf-8 -*-
 # datetime:2019/4/24 15:38
 
-mysql_opt={
-"user":"root",
-"passwd":"ouhao#18",
-"host":"120.78.127.137",
-"port":"3306",
-"db_name":"ouhaodw"
-}
 # mysql_opt={
 # "user":"root",
-# "passwd":"123456",
-# "host":"localhost",
+# "passwd":"ouhao#18",
+# "host":"120.78.127.137",
 # "port":"3306",
-# "db_name":"entrobus"
+# "db_name":"ouhaodw"
 # }
+mysql_opt={
+"user":"root",
+"passwd":"123456",
+"host":"localhost",
+"port":"3306",
+"db_name":"entrobus"
+}
+
+
 # excel表 : mysql表
 hj_tables={
-        # "昊居签约数据":"hj_subscription_data",
-        # "昊居任务额":"hj_task_amount",
+        "昊居签约数据":"hj_subscription_data",
+        "昊居任务额":"hj_task_amount",
         "昊居回款额":"hj_collection_amount",
-        # "昊居应收账款":"hj_accounts_receivable",
-        # "昊居类型收入利润":"hj_income_profit",
-        # "昊居项目净利润":"hj_project_profit",
-        # "昊居区域利润":"hj_region_profit",
-        # "昊居利率偏差":"hj_profit_deviation"
+        "昊居应收账款":"hj_accounts_receivable",
+        "昊居类型收入利润":"hj_income_profit",
+        "昊居项目净利润":"hj_project_profit",
+        "昊居区域利润":"hj_region_profit",
+        "昊居利率偏差":"hj_profit_deviation",
+          "项目对照表":"hj_project_contrast"
        }
 #excel表中列名 : mysql表列名
 hj_cols={
@@ -47,7 +50,8 @@ hj_cols={
 "昊居类型收入利润":{'年份':'year','月份':'month','毛利率':'rate_margin','净利率':'net_margin','类型':'type','更新时间':'update_time'},
 "昊居项目净利润":{'年份':'year','月份':'month','项目名称':'project','净利润':'net_profit','更新时间':'update_time'},
 "昊居区域利润":{'区域':'region','年份':'year','月份':'month','净利润':'net_profit','净利率':'net_margin','更新时间':'update_time'},
-"昊居利率偏差":{'年份':'year','月份':'month','类型':'type','累计利率':'accumulation_rate','目标利率':'target_rate','偏差':'deviation','更新时间':'update_time'}
+"昊居利率偏差":{'年份':'year','月份':'month','类型':'type','累计利率':'accumulation_rate','目标利率':'target_rate','偏差':'deviation','更新时间':'update_time'},
+"项目对照表":{"项目名称":"project","项目编码":"project_id","类型":"type","更新时间":"update_time"}
 }
 
 

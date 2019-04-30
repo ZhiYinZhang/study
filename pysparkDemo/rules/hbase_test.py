@@ -8,8 +8,3 @@ from pyspark.sql import functions as f
 import psutil
 import time
 import traceback as tb
-try:
-    1/0
-except Exception as e:
-    tb.print_exc()
-print(1)

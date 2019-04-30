@@ -238,8 +238,8 @@ del(co_debit_acc)
 
 
 # ------------------------------------------  retail（零售户分析）表 统计类信息--------------------------------
-# -----------------------获取co_co_01
-co_co_01 = spark.sql("select  cust_id,cast(qty_sum as float),cast(amt_sum as float),born_date from DB2_DB2INST1_CO_CO_01 where pmt_status=1") \
+# -----------------------获取co_co_01        unique_kind: 90 退货  10 普通订单    pmt_status:  0 未付款  1 收款完成
+co_co_01 = spark.sql("select  cust_id,cast(qty_sum as float),cast(amt_sum as float),born_date from DB2_DB2INST1_CO_CO_01 where (unique_kind = 90 and pmt_status=0) or (unique_kind=10 and pmt_status=1)") \
     .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
     .withColumn("today", f.current_date()) \
     .withColumn("week_diff", week_diff("today","born_date"))\
@@ -563,7 +563,7 @@ except Exception as e:
 
 
 #-------------co_co_01  去年
-last_year = spark.sql("select  cust_id,cast(qty_sum as float),cast(amt_sum as float),born_date from DB2_DB2INST1_CO_CO_01 where pmt_status=1") \
+last_year = spark.sql("select  cust_id,cast(qty_sum as float),cast(amt_sum as float),born_date from DB2_DB2INST1_CO_CO_01 where (unique_kind = 90 and pmt_status=0) or (unique_kind=10 and pmt_status=1)") \
     .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
     .withColumn("last_year_today", f.date_sub(f.current_date(), 365)) \
     .withColumn("month_diff",month_diff_udf(f.year(col("born_date")),f.month(col("born_date")),f.year(col("last_year_today")),f.month(col("last_year_today"))))\
@@ -714,7 +714,7 @@ except Exception as e:
 
 #租金 餐饮 酒店信息
 rent_food_hotel="/user/entrobus/zhangzy/rent_food_hotel/"
-poi={"rent":"fang_zu0326 xin.csv",
+poi={ "rent":"fang_zu0326 xin.csv",
       "food":"food_0326.csv",
       "hotel":"shaoyang_hotel_shop_list0326.csv"}
 #城市经纬度信息

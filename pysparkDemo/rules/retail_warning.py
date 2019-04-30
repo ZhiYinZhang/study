@@ -6,7 +6,9 @@ from pyspark.sql import functions as f
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 from pysparkDemo.rules.write_hbase import write_hbase1
-from pysparkDemo.rules.utils import grade_diff_udf,box_plots_filter_udf,month_diff_udf,is_except,divider_udf,fill_0_udf
+from pysparkDemo.rules.utils import grade_diff_udf,box_plots_filter_udf,month_diff_udf,is_except,divider_udf,fill_0_udf \
+     ,lng_l,lng_r,lat_d,lat_u
+from pyspark.sql import Window
 from datetime import datetime as dt
 
 spark = SparkSession.builder.enableHiveSupport().appName("retail warning").getOrCreate()
@@ -281,22 +283,22 @@ try:
     co_cust = spark.sql("select cust_id,cust_seg,com_id from DB2_DB2INST1_CO_CUST "
                         "where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04")
 
-    # -----------------------获取co_co_01
-    co_co_01 = spark.sql("select  qty_sum,amt_sum,born_date,cust_id from DB2_DB2INST1_CO_CO_01 where pmt_status=1") \
+    # -----------------------获取co_co_01      unique_kind: 90 退货  10 普通订单    pmt_status:  0 未付款  1 收款完成
+    co_co_01 = spark.sql("select  qty_sum,amt_sum,born_date,cust_id from DB2_DB2INST1_CO_CO_01 where (unique_kind = 90 and pmt_status=0) or (unique_kind=10 and pmt_status=1)") \
         .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
         .withColumn("today", f.current_date()) \
         .withColumn("month_diff",month_diff_udf(f.year(col("born_date")),f.month(col("born_date")),f.year(col("today")),f.month(col("today"))))\
         .where(col("month_diff") == 1)
 
-    #每个零售户的订货总量
-    order_sum=co_co_01.groupBy("cust_id").agg(f.sum("qty_sum").alias("order_sum"))
+    #每个零售户的订货总量 总订货额
+    qty_amt_sum = co_co_01.groupBy("cust_id").agg(f.sum("qty_sum").alias("order_sum"), f.sum("amt_sum").alias("amt_sum"))
 
 
 
     # -----零售店单月订购总量异常
     try:
         #每个零售户档位
-        order_sum=order_sum.withColumnRenamed("order_sum","value")\
+        order_sum=qty_amt_sum.withColumnRenamed("order_sum","value")\
                            .join(co_cust,"cust_id")\
                            .select("com_id","cust_seg","cust_id","value")
         cols={"abnormal":"sum_abno_month",
@@ -309,6 +311,24 @@ try:
         result.foreachPartition(lambda x:write_hbase1(x,list(cols.values()),hbase))
     except Exception as e:
         tb.print_exc()
+
+    #-----零售店单月订货条均价异常
+    try:
+        avg_price=qty_amt_sum.withColumn("value", divider_udf(col("amt_sum"), col("order_sum")))\
+                 .join(co_cust,"cust_id")\
+                 .select("com_id","cust_seg","cust_id","value")
+        cols = {"abnormal": "price_abno_month",
+                "mean_plus_3std": "grade_price_plus3",
+                "mean_minus_3std": "grade_price_minu3",
+                "mean": "grade_price"
+                }
+        print(f"{str(dt.now())}  零售店单月订货条均价异常")
+        result = is_except(avg_price, cols)
+        result.foreachPartition(lambda x: write_hbase1(x, list(cols.values()), hbase))
+    except Exception as e:
+        tb.print_exc()
+
+
 except Exception as e:
     tb.print_exc()
 
@@ -387,3 +407,81 @@ try:
 
 except Exception as e:
     tb.print_exc()
+
+
+
+
+
+#-----零售店订购烟品规异常
+try:
+    print(f"{str(dt.now())}  零售店订购烟品规异常")
+    co_co_line = spark.sql("select  cust_id,item_id,qty_ord,born_date from DB2_DB2INST1_CO_CO_LINE") \
+        .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
+        .withColumn("today", f.current_date()) \
+        .withColumn("month_diff",month_diff_udf(f.year(col("born_date")), f.month(col("born_date")), f.year(col("today")),f.month(col("today")))) \
+        .where(col("month_diff") == 1)
+
+    plm_item = spark.sql(
+        "select item_id,item_name from DB2_DB2INST1_PLM_ITEM where dt=(select max(dt) from DB2_DB2INST1_PLM_ITEM)")
+
+    city = spark.read.csv(header=True, path="/user/entrobus/zhangzy/long_lat/") \
+        .withColumn("longitude", col("longitude").cast("float")) \
+        .withColumn("latitude", col("latitude").cast("float")) \
+        .dropna(how="any", subset=["latitude", "latitude"]) \
+        .withColumn("cust_id0", fill_0_udf(col("cust_id"))) \
+        .select("cust_id0", "longitude", "latitude") \
+    # 每个零售户  一公里的经度范围和纬度范围
+    city0 = city.withColumn("lng_l", lng_l(col("longitude"), col("latitude"))) \
+        .withColumn("lng_r", lng_r(col("longitude"), col("latitude"))) \
+        .withColumn("lat_d", lat_d(col("latitude"))) \
+        .withColumn("lat_u", lat_u(col("latitude"))) \
+        .withColumnRenamed("cust_id0", "cust_id1") \
+        .select("cust_id1", "lng_l", "lng_r", "lat_d", "lat_u")
+
+
+    # 每个零售户 每类烟 的数量
+    cust_item_sum = co_co_line.join(plm_item, "item_id") \
+        .groupBy("cust_id", "item_name") \
+        .agg(f.sum("qty_ord").alias("cust_item_sum"))
+
+
+    #每个零售户订购量前三的烟
+    win = Window.partitionBy("cust_id").orderBy(col("cust_item_sum").desc())
+    rank3 = cust_item_sum.withColumn("rank", f.row_number().over(win)) \
+        .where(col("rank") <= 3) \
+        .groupBy("cust_id") \
+        .agg(f.collect_list("item_name").alias("items"))
+
+
+
+
+    win = Window.partitionBy("cust_id0").orderBy(col("one_km_item_sum").desc())
+    """
+      cust_id0包含cust_id1  cust_id1对应cust_id
+    1.第一个join，计算每个零售户cust_id0一公里内有哪些零售户cust_id1 
+    2.第二个join，一公里内的各个零售户所定各类烟的数量   cust_id1 与 cust_item_sum的cust_id
+    3.根据cust_id0 item_name 计算一公里内各类烟的数量
+    """
+    #每个零售户一公里内所定烟的前三
+    one_km_rank3 = city.join(city0, (col("longitude") >= col("lng_l")) & (col("longitude") <= col("lng_r")) & (col("latitude") >= col("lat_d")) & (col("latitude") <= col("lat_u"))) \
+        .join(cust_item_sum, col("cust_id1") == col("cust_id")) \
+        .select("cust_id0", "item_name", "cust_item_sum") \
+        .groupBy("cust_id0", "item_name") \
+        .agg(f.sum("cust_item_sum").alias("one_km_item_sum")) \
+        .withColumn("rank", f.row_number().over(win)) \
+        .where(col("rank") <= 3) \
+        .groupBy("cust_id0") \
+        .agg(f.collect_list("item_name").alias("one_km_items"))
+
+    colName=["regulation_abno","ciga_top3_last_month","ciga_top3_km"]
+    #求交集 长度为0，异常
+    rank3.join(one_km_rank3, col("cust_id") == col("cust_id0")) \
+        .where(f.size(f.array_intersect(col("items"), col("one_km_items"))) == 0) \
+        .withColumn(colName[0],f.lit(1))\
+        .withColumnRenamed("items",colName[1])\
+        .withColumnRenamed("one_km_items",colName[2])\
+        .foreachPartition(lambda x:write_hbase1(x,colName,hbase))
+except Exception as e:
+    tb.print_exc()
+
+

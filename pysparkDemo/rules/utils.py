@@ -5,6 +5,8 @@ import math
 from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 from pyspark.sql import functions as f
+from pyspark.sql import SparkSession
+#---------------------------------------udf---------------------------------------
 def period(x,y):
     try:
         x=float(x)
@@ -177,6 +179,94 @@ def is_except(df,cols:dict):
         .where(col(abnormal) >= 0)
 
     return result
+
+
+#---------------------------------数据集--------------------------------
+
+def get_co_cust(spark):
+    # -----------------co_cust 零售客户信息表   全量更新  选取dt最新的数据 并过滤掉无效的cust_id，即status为04(无效)
+    co_cust=spark.sql("select * from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04")
+    return co_cust
+def get_crm_cust(spark):
+    # ----------------crm_cust 零售客户信息表 为co_cust表的补充  全量更新  选取dt最新的数据
+    crm_cust=spark.sql("select * from DB2_DB2INST1_CRM_CUST where dt=(select max(dt) from DB2_DB2INST1_CRM_CUST)") \
+                    .withColumnRenamed("crm_longitude", "longitude") \
+                    .withColumnRenamed("crm_latitude", "latitude")
+    return crm_cust
+def get_co_co_01(spark):
+    #获取co_co_01        unique_kind: 90 退货  10 普通订单    pmt_status:  0 未付款  1 收款完成
+    co_co_01 = spark.sql("select  * from DB2_DB2INST1_CO_CO_01 where (unique_kind = 90 and pmt_status=0) or (unique_kind=10 and pmt_status=1)") \
+        .withColumn("born_date", f.to_date("born_date", "yyyyMMdd"))\
+        .withColumn("today",f.current_date())\
+        .withColumn("qty_sum",col("qty_sum").cast("float"))\
+        .withColumn("amt_sum",col("amt_sum").cast("float"))
+    return co_co_01
+
+def get_co_co_line(spark):
+    co_co_line = spark.sql(
+        "select * from DB2_DB2INST1_CO_CO_LINE") \
+        .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
+        .withColumn("today", f.current_date()) \
+        .withColumn("qty_ord", col("qty_ord").cast("float")) \
+        .withColumn("price", col("price").cast("float"))
+    return co_co_line
+
+def get_crm_cust_log(spark):
+    #crm_cust_log 变更记录表
+    # change_type:  CO_CUST.STATUS  状态变更
+    #               CO_CUST.CUST_SEG  档位变更
+    crm_cust_log = spark.sql("select cust_id,change_type,change_frm,change_to,audit_date from DB2_DB2INST1_CRM_CUST_LOG") \
+        .withColumn("audit_date", f.to_date("audit_date", "yyyyMMdd")) \
+        .withColumn("day_diff",f.datediff(f.current_date(), col("audit_date")))
+    return crm_cust_log
+
+def get_co_debit_acc(spark):
+    # 扣款账号信息表 全量更新
+    co_debit_acc = spark.sql("select * from DB2_DB2INST1_CO_DEBIT_ACC "
+                             "where dt=(select max(dt) from DB2_DB2INST1_CO_DEBIT_ACC)")
+    return co_debit_acc
+
+def get_plm_item(spark):
+    #卷烟信息
+    # ------------------获取plm_item
+    plm_item = spark.sql("select * from DB2_DB2INST1_PLM_ITEM where dt=(select max(dt) from DB2_DB2INST1_PLM_ITEM)")
+    return plm_item
+
+def get_coordinate(spark,hdfs_path):
+    # 餐厅、交通、商城、娱乐场馆等经纬度
+    coordinate = spark.read.csv(header=True, path=hdfs_path) \
+        .withColumn("lng", col("longitude").cast("float")) \
+        .withColumn("lat", col("latitude").cast("float")) \
+        .select("lng", "lat", "types")
+    return coordinate
+
+def get_area(spark,path):
+    area_code = spark.read.csv(path=path, header=True)
+    return area_code
+
+
+def get_cust_lng_lat(spark):
+    dir = "/user/entrobus/zhangzy/long_lat/"
+    files = {"株洲市": "株洲市零售户地址+经纬度+区域编码.csv",
+             "邵阳市": "邵阳市零售户地址+经纬度+区域编码.csv",
+             "岳阳市": "岳阳市零售户地址+经纬度+区域编码.csv"}
+    cities = list(files.keys())
+    dfs = []
+    for city in cities:
+        path = dir + files[city]
+        df = spark.read.csv(header=True, path=path) \
+            .withColumn("city", f.lit(city))\
+            .withColumn("longitude", col("longitude").cast("float")) \
+            .withColumn("latitude", col("latitude").cast("float")) \
+            .dropna(how="any", subset=["latitude", "latitude"])
+            # .withColumn("cust_id", fill_0_udf(col("cust_id"))) \
+        dfs.append(df)
+
+    df = dfs[0]
+    for i in range(1, len(dfs)):
+        df = df.unionByName(dfs[i])
+    return df
+
 
 if __name__=="__main__":
     print(divider("10","20"))
