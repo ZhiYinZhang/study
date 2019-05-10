@@ -26,4 +26,4 @@ def get_hdfs_client():
 
 if __name__=="__main__":
     cli=get_hdfs_client()
-    # cli.upload("zhangzy/population","E:\\test\邵阳岳阳株洲人口数据\邵阳岳阳株洲人口数据",True)
+    cli.upload("zhangzy/gdp","E:\资料\project\烟草\GDP\邵阳统计数据.csv",True)

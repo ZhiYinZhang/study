@@ -9,8 +9,6 @@ import time
 from datetime import datetime as dt
 if __name__=="__main__":
     spark: SparkSession = SparkSession.builder \
-        .config("spark.driver.extraClassPath=E:\mysql-connector-java-5.1.6.jar") \
-        .config("spark.executor.extraClassPath=E:\mysql-connector-java-5.1.6.jar") \
         .appName("demo") \
         .master("local[3]") \
         .getOrCreate()
@@ -18,17 +16,18 @@ if __name__=="__main__":
     sc = spark.sparkContext
     sc.setLogLevel("WARN")
 
-    df = spark.range(100000000).withColumn("value", f.when(col("id") % 3 == 0, 3).when(col("id") % 5 == 0, 5).when(
-        col("id") % 7 == 0, 7).otherwise(1)).persist()
 
-    print(str(dt.now()))
+    def get_lng_lat():
+        # -----网上爬取的经纬度
+        print(f"{str(dt.now())}   经纬度")
+        try:
+            co_cust = get_co_cust(spark).select("cust_id")
 
-    df.count()
-    mean = df.groupBy("value").agg(f.mean("id").alias("mean"))
-    mean.show()
-    stddev = df.groupBy("value").agg(f.stddev_pop("id").alias("stddev"))
-    stddev.show()
-    var = df.groupBy("value").agg(f.var_pop("id").alias("var"))
-    var.show()
+            # 每个城市的零售户的经纬度
+            cust_lng_lat = get_cust_lng_lat(spark).withColumn("cust_id", fill_0_udf(col("cust_id")))
 
-    print(str(dt.now()))
+            lng_lat = cust_lng_lat.select("cust_id", "longitude", "latitude") \
+                .join(co_cust, "cust_id")
+            return lng_lat
+        except Exception:
+            tb.print_exc()

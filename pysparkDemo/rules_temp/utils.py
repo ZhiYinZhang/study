@@ -2,6 +2,8 @@
 # -*- coding:utf-8 -*-
 # datetime:2019/4/8 16:39
 import math
+import traceback as tb
+from datetime import datetime as dt
 from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 from pyspark.sql import functions as f
@@ -96,14 +98,12 @@ box_plots_filter_udf=udf(box_plots_filter)
 
 
 
-#计算一个经纬度为中心，上下相差1km的纬度范围 左右相差1km的经度范围
-#1km
-scope=1
+#计算一个经纬度为中心，上下相差scope km的纬度范围 左右相差scope km的经度范围
 #cos(弧度)
-lng_r=udf(lambda lng,lat:lng+scope/(111.11*math.cos(math.radians(lat))),FloatType())
-lng_l=udf(lambda lng,lat:lng-scope/(111.11*math.cos(math.radians(lat))),FloatType())
-lat_u=udf(lambda lat:lat+scope/111.11,FloatType())
-lat_d=udf(lambda lat:lat-scope/111.11,FloatType())
+lng_r=udf(lambda lng,lat,scope:lng+scope/(111.11*math.cos(math.radians(lat))),FloatType())
+lng_l=udf(lambda lng,lat,scope:lng-scope/(111.11*math.cos(math.radians(lat))),FloatType())
+lat_u=udf(lambda lat,scope:lat+scope/111.11,FloatType())
+lat_d=udf(lambda lat,scope:lat-scope/111.11,FloatType())
 
 
 
@@ -148,17 +148,14 @@ abnormal_range_udf=udf(abnormal_range)
 
 
 
-add=udf(lambda x,y:float(x)+float(y),FloatType())
-
-
-
 def is_except(df,cols:dict,groupBy:list):
     """
 
-    :param df:  cust_id com_id cust_seg value
+    :param df: 包含的columns:cust_id com_id cust_seg value
     :param cols:
     :param groupBy: list
     """
+    value=cols["value"]
     abnormal=cols["abnormal"]
     mean_plus_3std=cols["mean_plus_3std"]
     mean_minus_3std=cols["mean_minus_3std"]
@@ -166,13 +163,13 @@ def is_except(df,cols:dict,groupBy:list):
 
     #按照 市 档位分组 求vlaue的均值和标准差
     mean_3std = df.groupBy(groupBy) \
-        .agg(f.mean("value").alias("mean"), (f.stddev_pop("value") * 3).alias("+3std"),
-             (f.stddev_pop("value") * (-3)).alias("-3std")) \
-        .withColumn("mean+3std", add(col("mean"), col("+3std"))) \
-        .withColumn("mean-3std", add(col("mean"), col("-3std")))
+        .agg(f.mean(value).alias("mean"), (f.stddev_pop(value) * 3).alias("+3std"),
+             (f.stddev_pop(value) * (-3)).alias("-3std")) \
+        .withColumn("mean+3std", col("mean")+col("+3std")) \
+        .withColumn("mean-3std", col("mean")+col("-3std"))
 
     result = df.join(mean_3std, groupBy) \
-        .withColumn(abnormal, abnormal_range_udf(col("value"), col("mean+3std"), col("mean-3std"))) \
+        .withColumn(abnormal, abnormal_range_udf(col(value), col("mean+3std"), col("mean-3std"))) \
         .withColumnRenamed("mean+3std", mean_plus_3std) \
         .withColumnRenamed("mean-3std", mean_minus_3std) \
         .withColumnRenamed("mean",mean)\
@@ -180,13 +177,105 @@ def is_except(df,cols:dict,groupBy:list):
 
     return result
 
+# 零售户周边(1km)消费水平
+def get_consume_level(spark):
+    """
+    :param spark: SparkSession
+    :return:
+    """
+    # 租金 餐饮 酒店信息
+    rent_food_hotel = "/user/entrobus/zhangzy/rent_food_hotel/"
+    poi = {"rent": "fang_zu0326 xin.csv",
+           "food": "food_0326.csv",
+           "hotel": "shaoyang_hotel_shop_list0326.csv"}
 
+    try:
+        cust_lng_lat = get_cust_lng_lat(spark).select("city", "cust_id", "longitude", "latitude") \
+            .withColumn("scope",f.lit(1))\
+            .withColumn("lng_l", lng_l(col("longitude"), col("latitude"),col("scope"))) \
+            .withColumn("lng_r", lng_r(col("longitude"), col("latitude"),col("scope"))) \
+            .withColumn("lat_d", lat_d(col("latitude"),col("scope"))) \
+            .withColumn("lat_u", lat_u(col("latitude"),col("scope"))) \
+            .drop("longitude", "latitude")
+
+        # -------------租金
+        print(f"{str(dt.now())}  rent")
+        path = rent_food_hotel + poi["rent"]
+        rent = spark.read.csv(header=True, path=path) \
+            .withColumn("lng", col("longitude").cast("float")) \
+            .withColumn("lat", col("latitude").cast("float")) \
+            .select("lng", "lat", "price_1square/(元/平米)")
+        # 零售户一公里的每平米租金
+        city_rent = rent.join(cust_lng_lat, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
+                col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
+        # 每个零售户一公里范围内的每平米租金的均值
+        city_rent_avg = city_rent.groupBy("city", "cust_id").agg(f.mean("price_1square/(元/平米)").alias("rent_avg"))
+
+        # 各市25%分位值
+        city_rent_avg.registerTempTable("city_rent_avg")
+        city_rent_avg = spark.sql(
+            "select city,percentile_approx(rent_avg,0.25) as rent_25 from city_rent_avg group by city") \
+            .join(city_rent_avg, "city")
+
+        # --------------餐饮
+        print(f"{str(dt.now())}  food")
+        path = rent_food_hotel + poi["food"]
+        food = spark.read.csv(header=True, path=path) \
+            .withColumn("lng", col("jingdu").cast("float")) \
+            .withColumn("lat", col("weidu").cast("float")) \
+            .select("lng", "lat", "mean_prices2")
+        city_food = food.join(cust_lng_lat, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
+                col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
+        # 每个零售户一公里范围内的餐饮价格的均值
+        city_food_avg = city_food.groupBy("city", "cust_id").agg(f.mean("mean_prices2").alias("food_avg"))
+
+        # 各市25%分位值
+        city_food_avg.registerTempTable("city_food_avg")
+        city_food_avg = spark.sql(
+            "select city,percentile_approx(food_avg,0.25) as food_25 from city_food_avg group by city") \
+            .join(city_food_avg, "city")
+
+        # --------------酒店
+        print(f"{str(dt.now())}  hotel")
+        path = rent_food_hotel + poi["hotel"]
+        hotel = spark.read.csv(header=True, path=path) \
+            .withColumn("lng", col("jingdu").cast("float")) \
+            .withColumn("lat", col("weidu").cast("float")) \
+            .select("lng", "lat", "price_new")
+        city_hotel = hotel.join(cust_lng_lat, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
+                col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
+        # 每个零售户一公里范围内的餐饮价格的均值
+        city_hotel_avg = city_hotel.groupBy("city", "cust_id").agg(f.mean("price_new").alias("hotel_avg"))
+
+        # 各市25%分位值
+        city_hotel_avg.registerTempTable("city_hotel_avg")
+        city_hotel_avg = spark.sql(
+            "select city,percentile_approx(hotel_avg,0.25) as hotel_25 from city_hotel_avg group by city") \
+            .join(city_hotel_avg, "city")
+
+        print(f"{str(dt.now())}   consume level")
+        consume_level_df = city_rent_avg.join(city_food_avg, ["city", "cust_id"],"outer") \
+            .join(city_hotel_avg, ["city", "cust_id"],"outer") \
+            .withColumn("cust_id", fill_0_udf(col("cust_id"))) \
+            .fillna(0, ["rent_25", "food_25", "hotel_25"]) \
+            .withColumn("consume_level",consume_level_udf(col("rent_avg"), col("food_avg"), col("hotel_avg"), col("rent_25"),col("food_25"), col("hotel_25")))
+
+        return consume_level_df
+    except Exception:
+        tb.print_exc()
 #---------------------------------数据集--------------------------------
 
 def get_co_cust(spark):
-    # -----------------co_cust 零售客户信息表   全量更新  选取dt最新的数据 并过滤掉无效的cust_id，即status为04(无效)
+    # -----------------co_cust 零售客户信息表   全量更新  选取dt最新的数据
     co_cust=spark.sql("select * from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04")
     return co_cust
+def get_valid_co_cust(spark):
+    #获取有效的零售户
+    co_cust=spark.sql("select * from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)")\
+                 .where(col("status").rlike("(01)|(02)"))
+    return co_cust
+
+
 def get_crm_cust(spark):
     # ----------------crm_cust 零售客户信息表 为co_cust表的补充  全量更新  选取dt最新的数据
     crm_cust=spark.sql("select * from DB2_DB2INST1_CRM_CUST where dt=(select max(dt) from DB2_DB2INST1_CRM_CUST)") \
@@ -225,7 +314,7 @@ def get_crm_cust_log(spark):
 def get_co_debit_acc(spark):
     # 扣款账号信息表 全量更新
     co_debit_acc = spark.sql("select * from DB2_DB2INST1_CO_DEBIT_ACC "
-                             "where dt=(select max(dt) from DB2_DB2INST1_CO_DEBIT_ACC)")
+                             "where dt=(select max(dt) from DB2_DB2INST1_CO_DEBIT_ACC) and status=1")
     return co_debit_acc
 
 def get_plm_item(spark):
@@ -264,7 +353,7 @@ def get_cust_lng_lat(spark):
             .withColumn("longitude", col("longitude").cast("float")) \
             .withColumn("latitude", col("latitude").cast("float")) \
             .dropna(how="any", subset=["latitude", "latitude"])
-            # .withColumn("cust_id", fill_0_udf(col("cust_id"))) \
+            # .withColumn("cust_id", fill_0_udf(col("cust_id"))) \#cust_id前面少个0
         dfs.append(df)
 
     df = dfs[0]
@@ -310,5 +399,6 @@ def get_city_ppl(spark):
     for i in range(1,len(dfs)):
         df=df.union(dfs[i])
     return df
+
 if __name__=="__main__":
     print(divider("10","20"))

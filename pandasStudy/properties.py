@@ -18,6 +18,9 @@ mysql_opt={
 }
 
 
+monitor_path="/home/zhangzy/ouhao/hj"
+
+
 # excel表 : mysql表
 hj_tables={
         "昊居签约数据":"hj_subscription_data",

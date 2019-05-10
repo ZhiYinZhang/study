@@ -552,7 +552,7 @@ def get_ppl_areaCpt_index():
     #-----区域竞争力指数
     try:
         # 区域零售户数目
-        cust_num = get_co_cust(spark).select("sale_center_id") \
+        cust_num =spark.sql("select * from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)").select("sale_center_id") \
             .groupBy("sale_center_id").count()
 
         # 人口数目/零售户数目

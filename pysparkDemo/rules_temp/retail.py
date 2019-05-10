@@ -62,6 +62,18 @@ cols = cust_info.columns
 cust_info.foreachPartition(lambda x: write_hbase1(x, cols,hbase))
 
 
+def get_acc():
+    #acc是扣款账号  不是co_cust里面的开户银行账号
+    print(f"{str(dt.now())} 扣款账号")
+    try:
+        co_cust = get_co_cust(spark).select("cust_id")
+        get_co_debit_acc(spark).select("cust_id", "acc") \
+            .join(co_cust, "cust_id") \
+            .foreachPartition(lambda x: write_hbase1(x, ["acc"], hbase))
+    except Exception:
+        tb.print_exc()
+
+get_acc()
 
 
 
@@ -94,9 +106,9 @@ def get_lng_lat():
         co_cust=get_co_cust(spark).select("cust_id")
 
         #每个城市的零售户的经纬度
-        city=get_cust_lng_lat(spark).withColumn("cust_id",fill_0_udf(col("cust_id")))\
+        cust_lng_lat=get_cust_lng_lat(spark).withColumn("cust_id",fill_0_udf(col("cust_id")))
 
-        lng_lat=city.select("cust_id","longitude","latitude")\
+        lng_lat=cust_lng_lat.select("cust_id","longitude","latitude")\
                            .join(co_cust,"cust_id")
         return lng_lat
     except Exception:
@@ -604,14 +616,15 @@ def get_cust_index():
     try:
         # 零售户经纬度
         co_cust=get_co_cust(spark).select("cust_id")
-        city = get_cust_lng_lat(spark).select("cust_id", "city", "longitude", "latitude") \
+        cust_lng_lat = get_cust_lng_lat(spark).select("cust_id", "city", "longitude", "latitude") \
                                  .withColumn("cust_id", fill_0_udf(col("cust_id"))) \
                                  .join(co_cust, "cust_id")
         # 每个零售户  一公里的经度范围和纬度范围
-        city0 = city.withColumn("lng_l", lng_l(col("longitude"), col("latitude"))) \
-            .withColumn("lng_r", lng_r(col("longitude"), col("latitude"))) \
-            .withColumn("lat_d", lat_d(col("latitude"))) \
-            .withColumn("lat_u", lat_u(col("latitude")))
+        cust_lng_lat0 = cust_lng_lat.withColumn("scope",f.lit(1))\
+            .withColumn("lng_l", lng_l(col("longitude"), col("latitude"),col("scope"))) \
+            .withColumn("lng_r", lng_r(col("longitude"), col("latitude"),col("scope"))) \
+            .withColumn("lat_d", lat_d(col("latitude"),col("scope"))) \
+            .withColumn("lat_u", lat_u(col("latitude"),col("scope")))
 
         for y in range(len(types)):
             try:
@@ -621,7 +634,7 @@ def get_cust_index():
                 print(f"{str(dt.now())}  {colName}指数")
                 # coordinate先过滤符合条件的服务 再去join零售户
                 count_df = coordinate.where(col("types").rlike(regex)) \
-                    .join(city0,(col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u"))) \
+                    .join(cust_lng_lat0,(col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u"))) \
                     .groupBy("city", "cust_id").count()
 
                 # 全市所有店铺同等计算方式的最大值
@@ -642,93 +655,8 @@ get_cust_index()
 
 
 
-# 零售户周边消费水平
-def get_consume_level():
-    # 租金 餐饮 酒店信息
-    rent_food_hotel = "/user/entrobus/zhangzy/rent_food_hotel/"
-    poi = {"rent": "fang_zu0326 xin.csv",
-           "food": "food_0326.csv",
-           "hotel": "shaoyang_hotel_shop_list0326.csv"}
-
-    try:
-        # 某个城市的零售户经纬度
-        co_cust = get_co_cust(spark).select("cust_id")
-        city = get_cust_lng_lat(spark).select("city", "cust_id", "longitude", "latitude") \
-            .withColumn("lng_l", lng_l(col("longitude"), col("latitude"))) \
-            .withColumn("lng_r", lng_r(col("longitude"), col("latitude"))) \
-            .withColumn("lat_d", lat_d(col("latitude"))) \
-            .withColumn("lat_u", lat_u(col("latitude"))) \
-            .drop("longitude", "latitude")
-
-        # -------------租金
-        print(f"{str(dt.now())}  rent")
-        path = rent_food_hotel + poi["rent"]
-        rent = spark.read.csv(header=True, path=path) \
-            .withColumn("lng", col("longitude").cast("float")) \
-            .withColumn("lat", col("latitude").cast("float")) \
-            .select("lng", "lat", "price_1square/(元/平米)")
-        # 零售户一公里的每平米租金
-        city_rent = rent.join(city, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
-                col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
-        # 每个零售户一公里范围内的每平米租金的均值
-        city_rent_avg = city_rent.groupBy("city", "cust_id").agg(f.mean("price_1square/(元/平米)").alias("rent_avg"))
-
-        # 各市25%分位值
-        city_rent_avg.registerTempTable("city_rent_avg")
-        city_rent_avg = spark.sql(
-            "select city,percentile_approx(rent_avg,0.25) as rent_25 from city_rent_avg group by city") \
-            .join(city_rent_avg, "city")
-
-        # --------------餐饮
-        print(f"{str(dt.now())}  food")
-        path = rent_food_hotel + poi["food"]
-        food = spark.read.csv(header=True, path=path) \
-            .withColumn("lng", col("jingdu").cast("float")) \
-            .withColumn("lat", col("weidu").cast("float")) \
-            .select("lng", "lat", "mean_prices2")
-        city_food = food.join(city, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
-                col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
-        # 每个零售户一公里范围内的餐饮价格的均值
-        city_food_avg = city_food.groupBy("city", "cust_id").agg(f.mean("mean_prices2").alias("food_avg"))
-
-        # 各市25%分位值
-        city_food_avg.registerTempTable("city_food_avg")
-        city_food_avg = spark.sql(
-            "select city,percentile_approx(food_avg,0.25) as food_25 from city_food_avg group by city") \
-            .join(city_food_avg, "city")
-
-        # --------------酒店
-        print(f"{str(dt.now())}  hotel")
-        path = rent_food_hotel + poi["hotel"]
-        hotel = spark.read.csv(header=True, path=path) \
-            .withColumn("lng", col("jingdu").cast("float")) \
-            .withColumn("lat", col("weidu").cast("float")) \
-            .select("lng", "lat", "price_new")
-        city_hotel = hotel.join(city, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
-                col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
-        # 每个零售户一公里范围内的餐饮价格的均值
-        city_hotel_avg = city_hotel.groupBy("city", "cust_id").agg(f.mean("price_new").alias("hotel_avg"))
-
-        # 各市25%分位值
-        city_hotel_avg.registerTempTable("city_hotel_avg")
-        city_hotel_avg = spark.sql(
-            "select city,percentile_approx(hotel_avg,0.25) as hotel_25 from city_hotel_avg group by city") \
-            .join(city_hotel_avg, "city")
-
-        print(f"{str(dt.now())}   consume level")
-        consume_level_df = city_rent_avg.join(city_food_avg, ["city", "cust_id"],"outer") \
-            .join(city_hotel_avg, ["city", "cust_id"],"outer") \
-            .withColumn("cust_id", fill_0_udf(col("cust_id"))) \
-            .fillna(0, ["rent_25", "food_25", "hotel_25"]) \
-            .withColumn("consume_level",consume_level_udf(col("rent_avg"), col("food_avg"), col("hotel_avg"), col("rent_25"),col("food_25"), col("hotel_25")))
-
-        return consume_level_df
-    except Exception:
-        tb.print_exc()
-
 
 #-----零售户周边消费水平指数
-
 """
 零售户所在位置一定范围内（1000m）对应消费水平/全市所有店铺同等计算方式的最大值*5，
 对应消费水平= 所在位置一定范围内（1000m）的（每平方米租金价格均值+餐饮价格均值+酒店价格均值）     
@@ -737,7 +665,7 @@ def get_consume_level():
 """
 def get_consume_level_index():
     try:
-        consume_level_df=get_consume_level()
+        consume_level_df=get_consume_level(spark)
 
         max_df = consume_level_df.groupBy("city").agg(f.max("consume_level").alias("max"))
 
