@@ -141,20 +141,20 @@ if __name__=="__main__":
     #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":"Tom"})
     # print(str(dt.now()))
 
-    # cols = {
-    #     "value": "retail_price_cons",
-    #     "abnormal": "price_cons",
-    #     "mean_plus_3std": "price_std_plus3",
-    #     "mean_minus_3std": "price_std_minu3",
-    #     "mean": "city_price_cons"
-    # }
-    # values = list(cols.values())
+    cols = {
+        "value": "retail_high_cons",
+        "abnormal": "high_cons",
+        "mean_plus_3std": "high_std_plus3",
+        "mean_minus_3std": "high_std_minu3",
+        "mean": "city_high_cons"
+    }
+    values = list(cols.values())
     #
-    # cols = ["sum_last_month"]
-    # rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
-    # for row in rows:
-    #         print(row)
-    #         print(decode(row,family=hbase["families"],cols=["ciga_top3_last_month","ciga_top3_km"],upper_case=True))
+    cols = values
+    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
+    for row in rows:
+            print(row)
+            # print(decode(row,family=hbase["families"],cols=["ciga_top3_last_month","ciga_top3_km"],upper_case=True))
 
 
 
