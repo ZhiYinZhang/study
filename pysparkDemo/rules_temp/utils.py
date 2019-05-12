@@ -133,24 +133,9 @@ def consume_level(rent,food,hotel,rent_25,food_25,hotel_25):
 consume_level_udf=udf(consume_level,FloatType())
 
 
-def abnormal_range(value,upper,lower):
-    try:
-        if value>upper:
-            return 1
-        elif value < lower:
-            return 0
-        else:
-            return -1
-    except Exception:
-        return -1
-
-abnormal_range_udf=udf(abnormal_range)
-
-
 
 def is_except(df,cols:dict,groupBy:list):
     """
-
     :param df: 包含的columns:cust_id com_id cust_seg value
     :param cols:
     :param groupBy: list
@@ -168,13 +153,14 @@ def is_except(df,cols:dict,groupBy:list):
         .withColumn("mean+3std", col("mean")+col("+3std")) \
         .withColumn("mean-3std", col("mean")+col("-3std"))
 
-    result = df.join(mean_3std, groupBy) \
-        .withColumn(abnormal, abnormal_range_udf(col(value), col("mean+3std"), col("mean-3std"))) \
+    result=df.join(mean_3std, groupBy)\
+        .withColumn(abnormal,f.when(col(value)>col("mean+3std"),1)
+                            .when(col(value)<col("mean-3std"),0)
+                  )\
         .withColumnRenamed("mean+3std", mean_plus_3std) \
         .withColumnRenamed("mean-3std", mean_minus_3std) \
-        .withColumnRenamed("mean",mean)\
-        .where(col(abnormal) >= 0)
-
+        .withColumnRenamed("mean", mean) \
+        .dropna(subset=[abnormal])
     return result
 
 # 零售户周边(1km)消费水平
@@ -263,6 +249,76 @@ def get_consume_level(spark):
         return consume_level_df
     except Exception:
         tb.print_exc()
+
+
+def except_grading(around_cust, value_df, cols: list, grade=[3, 4, 5]):
+    """
+
+    :param around_cust: 列:cust_id1,cust_id0  零售户cust_id1周边包含cust_id0这些零售户
+    :param value_df:  cust_id value   零售户cust_id计算的值  条均价/订单额
+    :param cols: {"value":value,"abnormal":""}
+    :param grade: [3,4,5] 按照 3/4/5倍标准差分档
+    :return:
+    """
+    value = cols["value"]
+    abnormal = cols["abnormal"]
+
+    mean_std = around_cust.join(value_df, col("cust_id0") == col("cust_id")) \
+        .select("cust_id1", value) \
+        .groupBy("cust_id1") \
+        .agg(f.mean(value).alias("mean"), f.stddev_pop(col(value)).alias("stddev"))
+
+    # 11 10 21 20 31 30  第一位表示:预警级别 1 2 3  第二位表示 过高:1 过低:0
+    # 均值+3标准差 < 条均价 < 均值+4标准差   过高
+    # 均值-4标准差 < 条均价 < 均值-3标准差   过低
+    except_cust = mean_std.join(value_df, col("cust_id1") == col("cust_id")) \
+        .withColumn("plus_one_grade", col("mean") + col("stddev") * grade[0]) \
+        .withColumn("minus_one_grade", col("mean") - col("stddev") * grade[0]) \
+        .withColumn("plus_two_grade", col("mean") + col("stddev") * grade[1]) \
+        .withColumn("minus_two_grade", col("mean") - col("stddev") * grade[1]) \
+        .withColumn("plus_three_grade", col("mean") + col("stddev") * grade[2]) \
+        .withColumn("minus_three_grade", col("mean") - col("stddev") * grade[2]) \
+        .withColumn(abnormal,
+                    f.when((col(value) > col("plus_one_grade")) & (col(value) < col("plus_two_grade")), "11")\
+                    .when((col(value) > col("minus_two_grade")) & (col(value) < col("minus_one_grade")), "10") \
+                    .when((col(value) > col("plus_two_grade")) & (col(value) < col("plus_three_grade")), "21") \
+                    .when((col(value) > col("minus_three_grade")) & (col(value) < col("minus_two_grade")), "20") \
+                    .when((col(value) > col("plus_three_grade")), "31")\
+                    .when((col(value) < col("minus_three_grade")), "30")
+                    ).dropna(subset=[abnormal])
+
+    return except_cust
+
+
+def get_around_cust(spark,around:int):
+    """
+     获取零售户cust_id1 包含cust_id0这些零售户
+    :param around: 周围 {around} km
+    """
+    #零售户经纬度
+    cust_lng_lat=get_cust_lng_lat(spark).withColumn("cust_id0", fill_0_udf(col("cust_id")))\
+                                        .select("cust_id0","longitude","latitude")
+    #每个零售户  一公里的经度范围和纬度范围
+    cust_lng_lat0 = cust_lng_lat.withColumn("scope",f.lit(around))\
+                                .withColumn("lng_l", lng_l(col("longitude"), col("latitude"),col("scope"))) \
+                                .withColumn("lng_r", lng_r(col("longitude"), col("latitude"),col("scope"))) \
+                                .withColumn("lat_d", lat_d(col("latitude"),col("scope"))) \
+                                .withColumn("lat_u", lat_u(col("latitude"),col("scope"))) \
+                                .withColumnRenamed("cust_id0", "cust_id1") \
+                                .select("cust_id1", "lng_l", "lng_r", "lat_d", "lat_u")
+    #每个零售户cust_id1 周边有cust_id0这些零售户
+    around_cust=cust_lng_lat.join(cust_lng_lat0,(col("longitude")>=col("lng_l")) & (col("longitude")<=col("lng_r")) & (col("latitude")>=col("lat_d")) & (col("latitude")<=col("lat_u")))\
+           .select("cust_id1","cust_id0")
+    return around_cust
+
+
+
+
+
+
+
+
+
 #---------------------------------数据集--------------------------------
 
 def get_co_cust(spark):

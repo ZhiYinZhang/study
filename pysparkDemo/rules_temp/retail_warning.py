@@ -583,7 +583,7 @@ def get_last_item_except():
    3.4 根据cust_id1和item_name 分组聚合，然后取前三
 四.取交集，长度为0，异常
 """
-def get_one_km_item_except():
+def get_around_gauge_except():
     try:
         print(f"{str(dt.now())}  零售店订购烟品规异常")
         co_cust=get_valid_co_cust(spark).select("cust_id")
@@ -654,7 +654,7 @@ def get_one_km_item_except():
     except Exception as e:
         tb.print_exc()
 
-get_one_km_item_except()
+get_around_gauge_except()
 
 
 
