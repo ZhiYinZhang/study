@@ -2,20 +2,20 @@
 # -*- coding:utf-8 -*-
 # datetime:2019/4/24 15:38
 
-# mysql_opt={
-# "user":"root",
-# "passwd":"ouhao#18",
-# "host":"120.78.127.137",
-# "port":"3306",
-# "db_name":"ouhaodw"
-# }
 mysql_opt={
 "user":"root",
-"passwd":"123456",
-"host":"localhost",
+"passwd":"ouhao#18",
+"host":"120.78.127.137",
 "port":"3306",
-"db_name":"entrobus"
+"db_name":"ouhaodw"
 }
+# mysql_opt={
+# "user":"root",
+# "passwd":"123456",
+# "host":"localhost",
+# "port":"3306",
+# "db_name":"entrobus"
+# }
 
 
 monitor_path="/home/zhangzy/ouhao/hj"

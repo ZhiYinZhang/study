@@ -31,29 +31,48 @@ def pd_read_hbase0(table,families):
         df = df.append(df_row, ignore_index=True)
     return df
 
-def pd_read_hbase1(table,fly_col):
+def pd_read_hbase1(table,family,cols,upper=False,limit=1000):
     """
 
     :param table: 表名
     :param fly_col: ["column_family:column"]
     :return:
     """
-    #
-    # table = "TOBACCO.RETAIL"
-    # fly_col = ["0:PRICE_LAST_MONTH"]
 
+    if upper:
+        # 转为大写
+        for i in range(len(cols)):
+            col = cols[i].upper()
+            cols[i]=col
+
+    #拼接 family:column
+    fly_cols = []
+    for col in cols:
+        fly_col = f"{family}:{col}"
+        fly_cols.append(fly_col)
+
+    print(cols)
+    print(fly_cols)
+    #获取连接
     conn = hb.Connection(host=host)
     table = conn.table(table)
 
+    #获取数据
+    rows = table.scan(columns=fly_cols, limit=limit)
 
-    rows = table.scan(columns=fly_col, limit=1000)
-
-    cols=[i.split(":")[1] for i in fly_col]
-
+    df_rows=[]
     df = pd.DataFrame(columns=cols)
     for key, value in rows:
-        df_row = {k.decode().split(":")[1]: value[k].decode() for k in value.keys()}
-        df = df.append(df_row, ignore_index=True)
+        #value  {b'0:col1':'value'}
+        df_row = {k.decode().split(":")[1] : value[k].decode() for k in value.keys()}
+        df_row["ID"]=key.decode()
+        # print(df_row)
+        df_rows.append(df_row)
+
+        if len(df_rows)==(limit/10):
+              df = df.append(df_rows, ignore_index=True)
+              df_rows.clear()
+    # print(df)
     return df
 
 def pd_write_hbase(df: pd.DataFrame, cols: list):
@@ -84,13 +103,14 @@ def pd_write_hbase(df: pd.DataFrame, cols: list):
         except Exception as e:
             print(e.args)
 if __name__=="__main__":
-    # table="TOBACCO.RETAIL"
+    table="TOBACCO.RETAIL"
     # fly_col=["0:PRICE_LAST_MONTH","0:PRICE_LAST_FOUR_WEEK"]
-    # df=pd_read_hbase1(table,fly_col)
-    # print(df)
-
-
-    table="coordinate"
-    families=["citycode","cityname","longitude","latitude","type_code","types"]
-    df=pd_read_hbase0(table,families)
+    cols=["id","grade","status","city","county"]
+    family=0
+    df=pd_read_hbase1(table, family, cols, upper=True,limit=1000)
     print(df)
+
+    # table="coordinate"
+    # families=["citycode","cityname","longitude","latitude","type_code","types"]
+    # df=pd_read_hbase0(table,families)
+    # print(df)

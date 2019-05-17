@@ -64,7 +64,10 @@ def decode(row,family,cols:list,upper_case=False):
 
     data = row[1]
     for key in cols:
-        data[key] = data[key].decode()
+        try:
+          data[key] = data[key].decode()
+        except Exception as e:
+              pass
     return [row[0],data]
 
 def get(table_name,family,cols:list,upper_case=False,limit=100):
@@ -77,10 +80,17 @@ def get(table_name,family,cols:list,upper_case=False,limit=100):
         # 转为大写
         for i in range(len(cols)):
             col = cols[i].upper()
-            cols[i] = f"{family}:{col}"
+            cols[i]=col
 
-    print(cols)
-    rows = table.scan(columns=cols, limit=limit)
+
+    # 拼接 family:column
+    fly_cols = []
+    for col in cols:
+        fly_col = f"{family}:{col}"
+        fly_cols.append(fly_col)
+
+    print(fly_cols)
+    rows = table.scan(columns=fly_cols, limit=limit)
 
     return rows
 
@@ -124,7 +134,7 @@ from  random import randint
 if __name__=="__main__":
     tables=["test1","test2",
             "TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING"]
-    hbase["table"]=tables[4]
+    hbase["table"]=tables[1]
 
     hbase["families"] = "0"
 
@@ -141,21 +151,22 @@ if __name__=="__main__":
     #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":"Tom"})
     # print(str(dt.now()))
 
-    cols = {
-        "value": "retail_high_cons",
-        "abnormal": "high_cons",
-        "mean_plus_3std": "high_std_plus3",
-        "mean_minus_3std": "high_std_minu3",
-        "mean": "city_high_cons"
-    }
-    values = list(cols.values())
-    #
-    cols = values
-    rows=get(table_name=hbase["table"], family=hbase["families"], cols=cols, upper_case=True,limit=1000)
-    for row in rows:
-            print(row)
-            # print(decode(row,family=hbase["families"],cols=["ciga_top3_last_month","ciga_top3_km"],upper_case=True))
+    cols = {"value": "retail_month_high",
+            "abnormal": "km_discrepancy_high_ratio",
+            'plus_one_grade': 'retail_month_high_plus3',
+            'minus_one_grade': 'retail_month_high_minu3',
+            'plus_two_grade': 'retail_month_high_plus4',
+            'minus_two_grade': 'retail_month_high_minu4',
+            'plus_three_grade': 'retail_month_high_plus5',
+            'minus_three_grade': 'retail_month_high_minu5'
+            }
+    values=list(cols.values())+["city","sale_center_id","cust_id"]
 
+    cols = values
+    rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=1300)
+    for row in rows:
+            # print(row)
+            print(decode(row,family=hbase["families"],cols=["city"],upper_case=True))
 
 
 
@@ -166,6 +177,6 @@ if __name__=="__main__":
     # print(str(dt.now()))
 
 
-    print(str(dt.now()))
-    delete_all(hbase["table"])
-    print(str(dt.now()))
+    # print(str(dt.now()))
+    # delete_all(hbase["table"])
+    # print(str(dt.now()))

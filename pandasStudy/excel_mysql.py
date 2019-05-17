@@ -108,4 +108,4 @@ def excel_to_mysql(file,tables,cols):
 #             notifier.stop()
 if __name__=="__main__":
     # fsMonitor(monitor_path)
-    excel_to_mysql(file="E:\\test\ouhao\hj\昊居数据库数据导入20190507.xlsx",tables=hj_tables,cols=hj_cols)
+    excel_to_mysql(file="E:\\test\ouhao\hj\昊居数据库数据导入20190513.xlsx",tables=hj_tables,cols=hj_cols)

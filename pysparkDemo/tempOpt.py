@@ -16,18 +16,11 @@ if __name__=="__main__":
     sc = spark.sparkContext
     sc.setLogLevel("WARN")
 
+    path="E:\资料\project\烟草\租金餐饮酒店\\food"
+    hotel1=spark.read.csv(path+"\shaoyang_food_0516.csv",header=True)
+    hotel2 = spark.read.csv(path + "\yueyang_food_0516.csv", header=True)
 
-    def get_lng_lat():
-        # -----网上爬取的经纬度
-        print(f"{str(dt.now())}   经纬度")
-        try:
-            co_cust = get_co_cust(spark).select("cust_id")
+    hotel=hotel1.unionByName(hotel2)
 
-            # 每个城市的零售户的经纬度
-            cust_lng_lat = get_cust_lng_lat(spark).withColumn("cust_id", fill_0_udf(col("cust_id")))
 
-            lng_lat = cust_lng_lat.select("cust_id", "longitude", "latitude") \
-                .join(co_cust, "cust_id")
-            return lng_lat
-        except Exception:
-            tb.print_exc()
+    hotel.repartition(1).write.csv("E:\资料\project\烟草\租金餐饮酒店\\food\\test",header=True,mode="overwrite")
