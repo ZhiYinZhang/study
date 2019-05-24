@@ -133,8 +133,10 @@ def delete_all(table_name):
 from  random import randint
 if __name__=="__main__":
     tables=["test1","test2",
-            "TOBACCO.AREA","TOBACCO.RETAIL","TOBACCO.RETAIL_WARNING"]
-    hbase["table"]=tables[1]
+            "TOBACCO.AREA","TOBACCO.RETAIL",
+            "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
+            "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
+    hbase["table"]=tables[0]
 
     hbase["families"] = "0"
 
@@ -145,29 +147,28 @@ if __name__=="__main__":
     table=conn.table(hbase["table"])
 
 
-    # print(str(dt.now()))
-    # with table.batch(batch_size=100) as batch:
-    #     for i in range(0,10):
-    #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":"Tom"})
-    # print(str(dt.now()))
+    print(str(dt.now()))
+    with table.batch(batch_size=1000) as batch:
+        for i in range(0,10000):
+            batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":f"Tom{i}"})
+    print(str(dt.now()))
 
-    cols = {"value": "retail_month_high",
-            "abnormal": "km_discrepancy_high_ratio",
-            'plus_one_grade': 'retail_month_high_plus3',
-            'minus_one_grade': 'retail_month_high_minu3',
-            'plus_two_grade': 'retail_month_high_plus4',
-            'minus_two_grade': 'retail_month_high_minu4',
-            'plus_three_grade': 'retail_month_high_plus5',
-            'minus_three_grade': 'retail_month_high_minu5'
-            }
-    values=list(cols.values())+["city","sale_center_id","cust_id"]
 
-    cols = values
-    rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=1300)
-    for row in rows:
-            # print(row)
-            print(decode(row,family=hbase["families"],cols=["city"],upper_case=True))
 
+    # cols = {"value": "stream_avg_orders",
+    #         "level1_code": "classify_level1_code"
+    #         }
+    # values = [
+    #          "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+    #          "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+    #          "warning_level_code", "cust_id", "city", "sale_center_id"
+    #          ] + list(cols.values())
+    #
+    # cols = ["primary_industry_add"]
+    # rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=1300)
+    # for row in rows:
+    #         print(row)
+            # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
 
 
 
@@ -177,6 +178,6 @@ if __name__=="__main__":
     # print(str(dt.now()))
 
 
-    # print(str(dt.now()))
-    # delete_all(hbase["table"])
-    # print(str(dt.now()))
+    print(str(dt.now()))
+    delete_all(hbase["table"])
+    print(str(dt.now()))

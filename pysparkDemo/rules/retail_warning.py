@@ -65,9 +65,10 @@ def get_lng_lat():
     #-----网上爬取的经纬度
     print(f"{str(dt.now())}   经纬度")
     try:
-        cust_lng_lat=get_cust_lng_lat(spark).select("cust_id","longitude","latitude") \
-            .withColumn("cust_id", fill_0_udf(col("cust_id")))
+        cust_lng_lat=get_cust_lng_lat(spark).select("cust_id","lng","lat")
         co_cust.join(cust_lng_lat,"cust_id")\
+            .withColumnRenamed("lng","longitude")\
+            .withColumnRenamed("lat","latitude")\
             .foreachPartition(lambda x:write_hbase1(x,["longitude","latitude"],hbase))
     except Exception as e:
        tb.print_exc()
@@ -597,7 +598,7 @@ def get_around_class_except():
 
         win = Window.partitionBy("cust_id1").orderBy(col("one_km_item_sum").desc())
         #每个零售户cust_id1 周边的零售户cust_id0
-        around_cust = get_around_cust(spark, 1)
+        around_cust = get_around_cust(spark, 1).select("cust_id1","cust_id0")
         """
           零售户cust_id1周边包含cust_id0这些零售户 
         1.第一个join，计算每个零售户cust_id1一公里内有哪些零售户cust_id0

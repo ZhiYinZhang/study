@@ -11,14 +11,108 @@ from pyspark.sql import Window
 from datetime import datetime as dt
 
 
-spark = SparkSession.builder.enableHiveSupport().appName("retail warning").getOrCreate()
+spark = SparkSession.builder.enableHiveSupport().appName("yueyang_warning").getOrCreate()
 sc=spark.sparkContext
 sc.setLogLevel("WARN")
 
 spark.sql("use aistrong")
 
-hbase={"table":"TOBACCO.RETAIL_WARNING","families":["0"],"row":"cust_id"}
+hbase={"table":"TOBACCO.WARNING_CODE","families":["0"],"row":"cust_id"}
 # hbase={"table":"test1","families":["0"],"row":"cust_id"}
+
+
+#-----近30天零售户订货量与当月周边人流数量不符
+def get_qty_vfr_except():
+    print(f"{str(dt.now())}  近30天零售户订货量与当月周边人流数量不符")
+    area_code = get_area(spark).dropDuplicates(["com_id", "sale_center_id"]).select("com_id", "sale_center_id", "city")
+    co_cust = get_valid_co_cust(spark).select("cust_id", "com_id", "sale_center_id") \
+        .join(area_code, ["com_id", "sale_center_id"])
+
+    # 距离cust_id1最近的30个零售户cust_id0
+    near_cust = get_near_cust(spark).select("cust_id1", "cust_id0")
+    cust_cluster=get_cust_cluster(spark)
+
+
+    #零售户近30天订货量
+    qty_sum = get_co_co_01(spark, [0, 30]).groupBy("cust_id") \
+                           .agg(f.sum("qty_sum").alias("qty_sum"))
+
+    #获取周边人流
+    around_vfr = get_around_vfr(spark)
+
+    cols = {"value": "stream_avg_orders",
+            "level1_code": "classify_level1_code",
+            }
+    vfr_avg_qty = qty_sum.join(around_vfr, "cust_id") \
+        .withColumn(cols["value"], col("qty_sum") / col("avg_vfr")) \
+        .select("cust_id", cols["value"])
+
+
+    except_cust = around_except_grade(near_cust, vfr_avg_qty,cust_cluster, cols, grade=[3, 4, 5]) \
+                                .join(co_cust, "cust_id") \
+                                .withColumn(cols["level1_code"], f.lit("YJFL001"))
+    values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id"
+             ] + list(cols.values())
+    except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
+
+
+
+
+
+#-----近30天零售户订货量与同等人流等级零售店订货量不符
+def get_same_vfr_grade_excpet():
+    print(f"{str(dt.now())}  近30天零售户订货量与同等人流等级零售店订货量不符")
+    #获取每个零售户 city sale_center_id
+    area_code = get_area(spark).dropDuplicates(["com_id", "sale_center_id"]).select("com_id", "sale_center_id", "city")
+    co_cust = get_valid_co_cust(spark).select("cust_id", "com_id", "sale_center_id") \
+                                      .join(area_code, ["com_id", "sale_center_id"])
+
+    cols = {"value": "retail_month_orders",
+            "level1_code": "classify_level1_code",
+            }
+    # 每个零售户近30天订货量
+    qty_sum = get_co_co_01(spark, [0, 30]).groupBy("cust_id") \
+        .agg(f.sum("qty_sum").alias(cols["value"]))
+
+
+
+    # 每个零售户平均人流
+    around_vfr = get_around_vfr(spark).withColumnRenamed("cust_id", "cust_id0")
+    cust_cluster = get_cust_cluster(spark)
+
+
+    around_vfr1 = around_vfr.withColumn("upper", col("avg_vfr") + col("avg_vfr") * 0.2) \
+                            .withColumn("lower", col("avg_vfr") - col("avg_vfr") * 0.2) \
+                            .withColumnRenamed("cust_id0", "cust_id1") \
+                            .withColumnRenamed("city", "city1") \
+                            .select("cust_id1", "city1", "upper", "lower")
+
+
+    #同等人流等级零售户=全市其他零售户中当月平均人流位于该零售户当月平均人流正负20%范围的零售户
+    # 与cust_id1 同人流级别的零售户cust_id0
+    same_vfr_grade = around_vfr1.join(around_vfr, (col("city1") == col("city")) & (col("avg_vfr") > col("lower")) & (
+                col("avg_vfr") < col("upper"))) \
+                  .select("cust_id1", "cust_id0")
+
+
+    except_cust = around_except_grade(same_vfr_grade, qty_sum,cust_cluster, cols, grade=[3, 4, 5]) \
+                                .join(co_cust, "cust_id") \
+                                .withColumn(cols["level1_code"], f.lit("YJFL002"))
+    values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id"
+             ] + list(cols.values())
+
+    except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
+
+
+
+
+
 
 
 # -----零售户近30天订货条均价与周边1km范围内零售户订货条均价不符
@@ -29,37 +123,39 @@ def get_around_order_except():
         co_cust = get_valid_co_cust(spark).select("cust_id", "com_id", "sale_center_id") \
             .join(area_code, ["com_id", "sale_center_id"])
 
-        # -----------------------获取co_co_01
+
         co_co_01 = get_co_co_01(spark, scope=[0, 30]) \
             .select("qty_sum", "amt_sum", "cust_id")
 
         # 每个零售户的订货总量 总订货额
         qty_amt_sum = co_co_01.groupBy("cust_id") \
-            .agg(f.sum("qty_sum").alias("order_sum"), f.sum("amt_sum").alias("amt_sum"))
+                              .agg(f.sum("qty_sum").alias("order_sum"), f.sum("amt_sum").alias("amt_sum"))
 
         # 每个零售户cust_id1 周边有cust_id0这些零售户
-        around_cust = get_around_cust(spark, 1)
+        around_cust = get_around_cust(spark, 1).select("cust_id1","cust_id0")
+        #零售户聚类结果
+        cust_cluster= get_cust_cluster(spark)
 
         print(f"{str(dt.now())}  零售户近30天订货条均价与周边1km范围内零售户订货条均价不符")
         try:
             cols = {"value": "retail_month_price",
-                    "abnormal": "km_discrepancy_price",
-                    'plus_one_grade': 'retail_month_price_plus3',
-                    'minus_one_grade': 'retail_month_price_minu3',
-                    'plus_two_grade': 'retail_month_price_plus4',
-                    'minus_two_grade': 'retail_month_price_minu4',
-                    'plus_three_grade': 'retail_month_price_plus5',
-                    'minus_three_grade': 'retail_month_price_minu5'
+                    "level1_code":"classify_level1_code",
                     }
 
             # 条均价
             avg_price = qty_amt_sum.withColumn(cols["value"], col("amt_sum") / col("order_sum")) \
                 .select("cust_id", cols["value"])
 
-            except_cust = around_except_grade(around_cust, avg_price, cols, [3, 4, 5]) \
-                .join(co_cust, "cust_id")
+            except_cust = around_except_grade(around_cust, avg_price,cust_cluster, cols, [3, 4, 5]) \
+                                            .join(co_cust, "cust_id")\
+                                            .withColumn(cols["level1_code"],f.lit("YJFL007"))
 
-            values = list(cols.values()) + ["cust_id", "city", "sale_center_id"]
+            values =[
+                     "avg_orders_plus3","avg_orders_minu3","avg_orders_plus4",
+                     "avg_orders_minu4","avg_orders_plus5","avg_orders_minu5",
+                     "warning_level_code","cust_id", "city", "sale_center_id"
+                    ]+list(cols.values())
+
             except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
         except Exception:
             tb.print_exc()
@@ -67,26 +163,26 @@ def get_around_order_except():
         print(f"{str(dt.now())} 零售户近30天订单额与周边1km范围内零售户订单额不符")
         try:
             cols = {"value": "retail_month_order_book",
-                    "abnormal": "km_discrepancy_order_book",
-                    'plus_one_grade': 'retail_month_order_book_plus3',
-                    'minus_one_grade': 'retail_month_order_book_minu3',
-                    'plus_two_grade': 'retail_month_order_book_plus4',
-                    'minus_two_grade': 'retail_month_order_book_minu4',
-                    'plus_three_grade': 'retail_month_order_book_plus5',
-                    'minus_three_grade': 'retail_month_order_book_minu5'
+                    "level1_code": "classify_level1_code",
                     }
 
             qty_amt_sum = qty_amt_sum.withColumnRenamed("amt_sum", cols["value"])
-            except_cust = around_except_grade(around_cust, qty_amt_sum, cols, [3, 4, 5]) \
-                .join(co_cust, "cust_id")
+            except_cust = around_except_grade(around_cust, qty_amt_sum, cust_cluster,cols, [3, 4, 5]) \
+                                            .join(co_cust, "cust_id")\
+                                            .withColumn(cols["level1_code"],f.lit("YJFL009"))
 
-            values = list(cols.values()) + ["cust_id", "city", "sale_center_id"]
-
+            values = [
+                     "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                     "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                     "warning_level_code", "cust_id", "city", "sale_center_id"
+                     ] + list(cols.values())
             except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
         except Exception:
             tb.print_exc()
     except Exception:
         tb.print_exc()
+# get_around_order_except()
+
 
 
 
@@ -102,60 +198,48 @@ def get_around_item_except():
     co_co_line = get_co_co_line(spark,scope=[0,30])\
                     .select("cust_id", "item_id", "qty_ord", "price", "amt")
 
-    around_cust = get_around_cust(spark, 1)
-
-
+    around_cust = get_around_cust(spark, 1).select("cust_id1","cust_id0")
+    cust_cluster=get_cust_cluster(spark)
 
     print(f"{str(dt.now())}  零售户高档烟订货比例与周边一公里范围内零售户订货比例不符")
     try:
         cols = {"value": "retail_month_high",
-                "abnormal": "km_discrepancy_high_ratio",
-                'plus_one_grade': 'retail_month_high_plus3',
-                'minus_one_grade': 'retail_month_high_minu3',
-                'plus_two_grade': 'retail_month_high_plus4',
-                'minus_two_grade': 'retail_month_high_minu4',
-                'plus_three_grade': 'retail_month_high_plus5',
-                'minus_three_grade': 'retail_month_high_minu5'
+                "level1_code": "classify_level1_code",
                 }
         #订货总量
         qty_sum = co_co_line.groupBy("cust_id").agg(f.sum("qty_ord").alias("qty_sum"))
         #高价烟比例
         high_ratio = co_co_line.where(col("price") >= 500) \
-            .groupBy("cust_id") \
-            .agg(f.sum("qty_ord").alias("high_qty_sum")) \
-            .join(qty_sum, "cust_id") \
-            .withColumn(cols["value"], col("high_qty_sum")/col("qty_sum"))
+                            .groupBy("cust_id") \
+                            .agg(f.sum("qty_ord").alias("high_qty_sum")) \
+                            .join(qty_sum, "cust_id") \
+                            .withColumn(cols["value"], col("high_qty_sum")/col("qty_sum"))
 
         grade = [3, 4, 5]
-        except_cust = around_except_grade(around_cust, high_ratio, cols, grade).join(co_cust, "cust_id")
+        result = around_except_grade(around_cust, high_ratio, cust_cluster,cols, grade) \
+                                    .join(co_cust, "cust_id") \
+                                    .withColumn(cols["level1_code"], f.lit("YJFL008"))
 
-        values = list(cols.values())+["cust_id","city","sale_center_id"]
-        except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
+        values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id"
+                 ] + list(cols.values())
+        result.foreachPartition(lambda x: write_hbase2(x, values, hbase))
     except Exception:
         tb.print_exc()
 
 
     #零售户省内外烟订货金额比例=省内烟订货金额/省外烟订货金额
+    # 零售户省内外烟订货比例 = 省内烟订货数量 / 省外烟订货数量
     try:
         #金额
         cols1 = {"value": "month_amount_ratio",
-                 "abnormal": "amount_ratio_discrepancy_outprov",
-                 'plus_one_grade': 'month_amount_ratio_plus3',
-                 'minus_one_grade': 'month_amount_ratio_minu3',
-                 'plus_two_grade': 'month_amount_ratio_plus4',
-                 'minus_two_grade': 'month_amount_ratio_minu4',
-                 'plus_three_grade': 'month_amount_ratio_plus5',
-                 'minus_three_grade': 'month_amount_ratio_minu5'
+                 "level1_code": "classify_level1_code",
                  }
         #数量
         cols2 = {"value": "month_count_ratio",
-                 "abnormal": "count_ratio_discrepancy_inprov",
-                 'plus_one_grade': 'month_count_ratio_plus3',
-                 'minus_one_grade': 'month_count_ratio_minu3',
-                 'plus_two_grade': 'month_count_ratio_plus4',
-                 'minus_two_grade': 'month_count_ratio_minu4',
-                 'plus_three_grade': 'month_count_ratio_plus5',
-                 'minus_three_grade': 'month_count_ratio_minu5'
+                 "level1_code": "classify_level1_code",
                  }
 
         line_plm = get_plm_item(spark).select("item_id", "yieldly_type")\
@@ -179,20 +263,35 @@ def get_around_item_except():
 
         print(f"{str(dt.now())}  零售户省内外烟订货金额比例与周边一公里范围内零售户省内外烟订货金额比例不符")
         #省内外烟  订货金额比例 异常
-        values = list(cols1.values())+["cust_id","city","sale_center_id"]
-        around_except_grade(around_cust, in_out_prov_ratio, cols1, grade)\
+        result=around_except_grade(around_cust, in_out_prov_ratio,cust_cluster, cols1, grade)\
                  .join(co_cust, "cust_id") \
-                 .foreachPartition(lambda x: write_hbase2(x, values, hbase))
+                 .withColumn(cols1["level1_code"], f.lit("YJFL010"))
+
+        values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id"
+                 ] + list(cols1.values())
+        result.foreachPartition(lambda x: write_hbase2(x, values, hbase))
+
 
 
         print(f"{str(dt.now())}  零售户省内外烟订货数量比例与周边一公里范围内零售户省内外烟订货数量比例不符")
         #省内外烟  订货数量比例 异常
-        values = list(cols2.values())+["cust_id","city","sale_center_id"]
-        around_except_grade(around_cust, in_out_prov_ratio, cols2, grade)\
+
+        result=around_except_grade(around_cust, in_out_prov_ratio,cust_cluster, cols2, grade) \
                         .join(co_cust, "cust_id") \
-                        .foreachPartition(lambda x: write_hbase2(x, values, hbase))
+                        .withColumn(cols2["level1_code"], f.lit("YJFL011"))
+
+        values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id"
+                 ] + list(cols2.values())
+        result.foreachPartition(lambda x: write_hbase2(x, values, hbase))
     except Exception:
         tb.print_exc()
+# get_around_item_except()
 
 
 
@@ -203,15 +302,18 @@ def get_around_item_except():
 
 
 
-#-----近30天零售户消费水平与全市同档位消费水平不符
+#-----近30天零售户档位与周边消费水平不符
 def get_grade_cons_except():
-    print(f"{str(dt.now())} 近30天零售户消费水平与全市同档位消费水平不符")
+    print(f"{str(dt.now())} 近30天零售户档位与周边消费水平不符")
     try:
-        consume_level=get_consume_level(spark)\
+        consume_level=get_all_consume_level(spark)\
                              .select("city","cust_id","consume_level")
-        #只展示目前有效的零售户    可以去掉 过去有效 现在无效的零售户
+        cust_cluster=get_cust_cluster(spark)
+
+        #只展示目前有效的零售户    去掉 过去有效 现在无效的零售户
         valid_co_cust=get_valid_co_cust(spark).select("cust_id","sale_center_id")
 
+        #近30天零售户档位  一个零售户近30天内多种档位，分别预警
         cust_seg=spark.sql("select * from DB2_DB2INST1_CO_CUST")\
              .where(f.datediff(f.current_date(),col("dt"))<=30)\
              .where(col("com_id").isin(["011114305","011114306","011114302"]))\
@@ -221,26 +323,28 @@ def get_grade_cons_except():
              .dropDuplicates(["cust_id","cust_seg"])
 
         cols = {"value": "retail_rim_cons",
-                        "abnormal": "grade_discrepancy_cons_month",
-                        'plus_one_grade': 'city_grade_cons_avg_plus2',
-                        'minus_one_grade': 'city_grade_cons_avg_minu2',
-                        'plus_two_grade': 'city_grade_cons_avg_plus3',
-                        'minus_two_grade': 'city_grade_cons_avg_minu3',
-                        'plus_three_grade': 'city_grade_cons_avg_plus4',
-                        'minus_three_grade': 'city_grade_cons_avg_minu4'
-                        }
+                "level1_code": "classify_level1_code",
+                }
         cust_seg_cons=cust_seg.join(consume_level,"cust_id")\
                              .withColumnRenamed("consume_level",cols["value"])\
-                             .select("city","cust_id","cust_seg","sale_center_id",cols["value"])
+                             .join(cust_cluster,"cust_id")\
+                             .select("city","cust_id","cust_seg","cluster_index","sale_center_id",cols["value"])
 
-        except_cust=except_grade(cust_seg_cons,cols,["city","cust_seg"],[2,3,4])
-        cols1=["retail_grade","city_grade_cons_avg","city","sale_center_id","cust_id"]
-        values=list(cols.values())+cols1
-        except_cust.withColumnRenamed("cust_seg",cols1[0])\
-                .withColumnRenamed("mean",cols1[1])\
-                .foreachPartition(lambda x:write_hbase2(x,values,hbase))
+        result=except_grade(cust_seg_cons,cols,["city","cust_seg","cluster_index"],[2,3,4])\
+                .withColumnRenamed("cust_seg","retail_grade")\
+                .withColumnRenamed("mean","city_grade_cons_avg") \
+                .withColumn(cols["level1_code"], f.lit("YJFL003"))
+
+        values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id",
+                 "retail_grade", "city_grade_cons_avg"
+                 ] + list(cols.values())
+        result.foreachPartition(lambda x:write_hbase2(x,values,hbase))
     except Exception:
         tb.print_exc()
+# get_grade_cons_except()
 
 
 
@@ -250,23 +354,23 @@ def get_grade_cons_except():
 def get_high_cons_except():
     try:
         cols = {"value": "high_order_cons_ratio",
-                "abnormal": "high_discrepancy_cons_month",
-                'plus_one_grade': 'high_order_cons_ratio_plus3',
-                'minus_one_grade': 'high_order_cons_ratio_minu3',
-                'plus_two_grade': 'high_order_cons_ratio_plus4',
-                'minus_two_grade': 'high_order_cons_ratio_minu4',
-                'plus_three_grade': 'high_order_cons_ratio_plus5',
-                'minus_three_grade': 'high_order_cons_ratio_minu5'
+                "level1_code": "classify_level1_code",
                 }
 
-        co_cust = get_valid_co_cust(spark).select("cust_id", "sale_center_id")
+        co_cust = get_valid_co_cust(spark).select("cust_id","sale_center_id")\
+
+
+
+        cust_cluster = get_cust_cluster(spark)
+
         print(f"{str(dt.now())}  零售店高价烟比例/消费水平")
         # 消费水平
-        consume_level_df = get_consume_level(spark).select("city", "cust_id", "consume_level")
+        consume_level_df = get_all_consume_level(spark).select("city", "cust_id", "consume_level")
 
-        # -----------------------获取co_co_line
+
         co_co_line = get_co_co_line(spark, scope=[0, 30]) \
-            .select("cust_id", "qty_ord", "price")
+                               .select("cust_id", "qty_ord", "price")
+
 
         # 零售户所定烟的总数目
         item_num = co_co_line.groupBy("cust_id").agg(f.sum("qty_ord").alias("item_num"))
@@ -283,14 +387,23 @@ def get_high_cons_except():
         # 每个零售户高档烟比例/周边消费水平的比值
         high_consume_level = high_price_ratio.join(consume_level_df, "cust_id") \
             .withColumn(cols["value"], col("high_price_ratio") / col("consume_level")) \
-            .select("city", "cust_id", cols["value"])
+            .join(cust_cluster,"cust_id")\
+            .select("city", "cust_id","cluster_index", cols["value"])
 
-        values = list(cols.values()) + ["cust_id", "city", "sale_center_id"]
-        except_grade(high_consume_level, cols, ["city"], [3, 4, 5]) \
-            .join(co_cust, "cust_id") \
-            .foreachPartition(lambda x: write_hbase2(x, values, hbase))
+
+        result=except_grade(high_consume_level, cols, ["city","cluster_index"], [3, 4, 5]) \
+                                        .join(co_cust, "cust_id") \
+                                        .withColumn(cols["level1_code"], f.lit("YJFL004"))
+
+        values =[
+              "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+              "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+              "warning_level_code", "cust_id", "city", "sale_center_id"
+              ] + list(cols.values())
+        result.foreachPartition(lambda x: write_hbase2(x, values, hbase))
     except Exception:
         tb.print_exc()
+# get_high_cons_except()
 
 
 
@@ -300,67 +413,77 @@ def get_high_cons_except():
 # -----近30天零售户订单额与周边消费水平不符
 def get_avg_cons_except():
     try:
-        co_cust = get_valid_co_cust(spark).select("cust_id", "sale_center_id")
 
-        consume_level_df = get_consume_level(spark).select("city", "cust_id", "consume_level")
+        co_cust = get_valid_co_cust(spark).select("cust_id", "sale_center_id")\
+
+        consume_level_df = get_all_consume_level(spark).select("city", "cust_id", "consume_level")
+
+        cust_cluster = get_cust_cluster(spark)
+
 
         # -----------------------获取co_co_01
         co_co_01 = get_co_co_01(spark, scope=[0, 30]) \
-            .select("qty_sum", "amt_sum", "cust_id")
+                               .select("qty_sum", "amt_sum", "cust_id")
 
         # 每个零售户的订货总量 总订货额
         qty_amt_sum = co_co_01.groupBy("cust_id") \
-            .agg(f.sum("qty_sum").alias("order_sum"), f.sum("amt_sum").alias("amt_sum"))
+                              .agg(f.sum("qty_sum").alias("order_sum"), f.sum("amt_sum").alias("amt_sum"))
 
         print(f"{str(dt.now())}  零售店订货条均价/消费水平")
         try:
             cols = {"value": "order_price_cons",
-                    "abnormal": "price_discrepancy_cons_month",
-                    'plus_one_grade': 'order_price_cons_plus3',
-                    'minus_one_grade': 'order_price_cons_minu3',
-                    'plus_two_grade': 'order_price_cons_plus4',
-                    'minus_two_grade': 'order_price_cons_minu4',
-                    'plus_three_grade': 'order_price_cons_plus5',
-                    'minus_three_grade': 'order_price_cons_minu5'
+                    "level1_code": "classify_level1_code",
                     }
             # 每个零售户的订货条均价
             avg_price = qty_amt_sum.withColumn("avg_price", col("amt_sum") / col("order_sum")) \
-                .select("cust_id", "avg_price")
+                                  .select("cust_id", "avg_price")
 
             avg_consume_level = avg_price.join(consume_level_df, "cust_id") \
-                .withColumn(cols["value"], col("avg_price") / col("consume_level")) \
-                .select("city", "cust_id", cols["value"])
+                                        .withColumn(cols["value"], col("avg_price") / col("consume_level")) \
+                                        .join(cust_cluster,"cust_id")\
+                                        .select("city", "cust_id","cluster_index", cols["value"])
 
-            values = list(cols.values()) + ["city", "cust_id", "sale_center_id"]
 
-            except_grade(avg_consume_level, cols, ["city"], [3, 4, 5]) \
+
+            result=except_grade(avg_consume_level, cols, ["city","cluster_index"], [3, 4, 5]) \
                 .join(co_cust, "cust_id") \
-                .foreachPartition(lambda x: write_hbase2(x, values, hbase))
+                .withColumn(cols["level1_code"], f.lit("YJFL006"))
+
+            values = [
+                     "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                     "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                     "warning_level_code", "cust_id", "city", "sale_center_id"
+                     ] + list(cols.values())
+            result.foreachPartition(lambda x: write_hbase2(x, values, hbase))
         except Exception:
             tb.print_exc()
 
         print(f"{str(dt.now())}  零售店订单额/消费水平")
         try:
             cols = {"value": "order_book_cons",
-                    "abnormal": "order_book_discrepancy_cons",
-                    'plus_one_grade': 'order_book_cons_plus3',
-                    'minus_one_grade': 'order_book_cons_minu3',
-                    'plus_two_grade': 'order_book_cons_plus4',
-                    'minus_two_grade': 'order_book_cons_minu4',
-                    'plus_three_grade': 'order_book_cons_plus5',
-                    'minus_three_grade': 'order_book_cons_minu5'
+                    "level1_code": "classify_level1_code",
                     }
 
             amt_cons_ratio = qty_amt_sum.join(consume_level_df, "cust_id") \
-                .withColumn(cols["value"], col("amt_sum") / col("consume_level")) \
-                .select("city", "cust_id", cols["value"])
+                                        .withColumn(cols["value"], col("amt_sum") / col("consume_level")) \
+                                        .join(cust_cluster,"cust_id")\
+                                        .select("city", "cust_id","cluster_index", cols["value"])
 
-            values = list(cols.values()) + ["city", "cust_id", "sale_center_id"]
-            print(values)
-            except_grade(amt_cons_ratio, cols, ["city"], [3, 4, 5]) \
+
+
+            result=except_grade(amt_cons_ratio, cols, ["city","cluster_index"], [3, 4, 5])\
                 .join(co_cust, "cust_id") \
-                .foreachPartition(lambda x: write_hbase2(x, values, hbase))
+                .withColumn(cols["level1_code"], f.lit("YJFL005"))
+
+            values = [
+                     "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                     "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                     "warning_level_code", "cust_id", "city", "sale_center_id"
+                     ] + list(cols.values())
+            result.foreachPartition(lambda x: write_hbase2(x, values, hbase))
         except Exception:
             tb.print_exc()
     except Exception:
         tb.print_exc()
+# get_avg_cons_except()
+

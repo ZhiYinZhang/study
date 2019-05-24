@@ -9,7 +9,7 @@ conn=phoenixdb.connect(database_url,max_retries=3,autocommit=True)
 
 cursor=conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
 
-sql="select * from tobacco.code limit 100"
+sql="select distinct(cust_id) from tobacco.warning_code"
 cursor.execute(sql)
 rows=cursor.fetchall()
 

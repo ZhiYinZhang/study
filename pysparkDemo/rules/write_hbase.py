@@ -124,7 +124,20 @@ def pd_write_hbase(df:pd.DataFrame,cols:list):
             except Exception as e:
                 print(e.args)
 
+def delete_all(table_name):
+    pool = happybase.ConnectionPool(host=hbase_host, size=hbase_pool_size)
+    with pool.connection() as conn:
+        table = conn.table(table_name)
 
+        print(table_name)
+        rows = table.scan()
+        size=0
+        with table.batch(batch_size=10000) as batch:
+            for row in rows:
+                size+=1
+                # print(row[0],row[1])
+                batch.delete(row[0])
+        print("size:",size)
 if __name__=="__main__":
     pass
     # df=pd.read_csv("E:/test_return(1).csv")

@@ -30,7 +30,15 @@ if __name__=="__main__":
     conn = phoenixdb.connect(database_url, max_retries=3, autocommit=True)
     cursor = conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
 
-    # sql="select ID,CITY,GRADE,SUM_LAST_WEEK,AMOUNT_LAST_WEEK,ORDERS_LAST_WEEK from tobacco.retail where city='岳阳市' and SUM_LAST_WEEK is not null and AMOUNT_LAST_WEEK is not null and ORDERS_LAST_WEEK is not null limit 10000"
-    # df=pandas_read_phoenix(cursor, sql,batch=500)
+    sql="select cust_id,order_competitive_index from tobacco.retail where city='岳阳市' limit 500"
 
 
+    df=pandas_read_phoenix(cursor, sql)
+
+
+    # df=df.replace(to_replace="None",value="0")
+    # df["ORDER_COMPETITIVE_INDEX"]=df["ORDER_COMPETITIVE_INDEX"].astype('float')
+    # print(df[df.ORDER_COMPETITIVE_INDEX>1])
+
+
+    print(df)

@@ -4,6 +4,7 @@
 # @Email   : S
 # @File    : hdfsClient.py
 from hdfs import client
+import traceback as tb
 # from hdfs.ext.kerberos import KerberosClient
 def get_hdfs_client():
     """
@@ -31,11 +32,12 @@ if __name__=="__main__":
     while len(succ)==0:
        print(f"第{num}次")
        try:
-            succ=cli.upload("zhangzy/rent_food_hotel/","E:\资料\project\烟草\租金餐饮酒店\\",True)
+            succ=cli.upload("tobacco_data/gdp/","E:\资料\project\烟草\GDP/邵阳统计数据.csv",True)
        except Exception as e:
-            print(e.args)
+            tb.print_exc()
        num+=1
     print("success")
 
+    # cli.makedirs("tobacco_data/gdp")
+    # cli.delete("tobacco_data/gdp",True)
 
-    # cli.makedirs("zhangzy/renliu")
