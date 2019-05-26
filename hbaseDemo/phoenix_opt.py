@@ -9,7 +9,7 @@ conn=phoenixdb.connect(database_url,max_retries=3,autocommit=True)
 
 cursor=conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
 
-sql="select distinct(cust_id) from tobacco.warning_code"
+sql="select count(cust_id),status from tobacco.retail group by status"
 cursor.execute(sql)
 rows=cursor.fetchall()
 

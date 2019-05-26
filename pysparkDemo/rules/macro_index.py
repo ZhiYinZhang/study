@@ -71,7 +71,7 @@ def get_area_info():
 def get_area_ppl():
     print(f"{str(dt.now())}   人口数量")
     try:
-        population = get_city_ppl(spark).select("city", "区县", "总人口", "常驻人口", "城镇人口", "农村人口")
+        population = get_city_ppl(spark).select("city", "区县", "总人口", "常住人口", "城镇人口", "农村人口")
         area_code = get_area(spark).where(col("city").rlike("株洲市|邵阳市|岳阳市")) \
                                   .select("county", "sale_center_id")
         area_plt = population.join(area_code, col("county") == col("区县"))
@@ -80,7 +80,7 @@ def get_area_ppl():
 
         # 每个区域中心的人口
         sale_center_ppl = area_plt.groupBy("city", "sale_center_id") \
-                                  .agg(f.sum("总人口").alias(cols[0]), f.sum("常驻人口").alias(cols[1]),
+                                  .agg(f.sum("总人口").alias(cols[0]), f.sum("常住人口").alias(cols[1]),
                                          f.sum("城镇人口").alias(cols[2]), f.sum("农村人口").alias(cols[3]))
 
         sale_center_ppl.foreachPartition(lambda x:write_hbase1(x,cols,hbase))

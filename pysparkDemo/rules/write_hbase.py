@@ -124,13 +124,18 @@ def pd_write_hbase(df:pd.DataFrame,cols:list):
             except Exception as e:
                 print(e.args)
 
-def delete_all(table_name):
+def delete_all(table_name,column):
+    """
+
+    :param table_name: 表名
+    :param column:  注意大小写  只是为了scan返回数据少一点
+    """
     pool = happybase.ConnectionPool(host=hbase_host, size=hbase_pool_size)
     with pool.connection() as conn:
         table = conn.table(table_name)
 
         print(table_name)
-        rows = table.scan()
+        rows = table.scan(columns={f"0:{column}"})
         size=0
         with table.batch(batch_size=10000) as batch:
             for row in rows:

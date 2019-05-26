@@ -30,7 +30,7 @@ if __name__=="__main__":
     conn = phoenixdb.connect(database_url, max_retries=3, autocommit=True)
     cursor = conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
 
-    sql="select cust_id,order_competitive_index from tobacco.retail where city='岳阳市' limit 500"
+    sql="select cust_id from tobacco.retail"
 
 
     df=pandas_read_phoenix(cursor, sql)
@@ -41,4 +41,4 @@ if __name__=="__main__":
     # print(df[df.ORDER_COMPETITIVE_INDEX>1])
 
 
-    print(df)
+    df.to_csv("E:\dataset\cust_id.csv",index=False)

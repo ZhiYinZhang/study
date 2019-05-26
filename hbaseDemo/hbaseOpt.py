@@ -116,18 +116,23 @@ def delete(table_name,family,cols:list,upper_case=False):
                     # print(row[0],row[1])
                     batch.delete(row[0],cols)
 
-def delete_all(table_name):
+def delete_all(table_name,column):
+    """
+
+    :param table_name: 表名
+    :param column:  注意大小写
+    """
     pool = happybase.ConnectionPool(host=hbase["host"], size=hbase["size"])
     with pool.connection() as conn:
         table = conn.table(table_name)
 
         print(table_name)
-        rows = table.scan()
+        rows = table.scan(columns={f"0:{column}"})
         size=0
         with table.batch(batch_size=10000) as batch:
             for row in rows:
                 size+=1
-                print(row[0],row[1])
+                # print(row[0],row[1])
                 batch.delete(row[0])
         print("size:",size)
 from  random import randint
@@ -136,7 +141,7 @@ if __name__=="__main__":
             "TOBACCO.AREA","TOBACCO.RETAIL",
             "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
             "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
-    hbase["table"]=tables[0]
+    hbase["table"]=tables[3]
 
     hbase["families"] = "0"
 
@@ -146,12 +151,13 @@ if __name__=="__main__":
     conn=happybase.Connection(host=hbase["host"])
     table=conn.table(hbase["table"])
 
+    # table.delete(columns={"0:age"})
 
-    print(str(dt.now()))
-    with table.batch(batch_size=1000) as batch:
-        for i in range(0,10000):
-            batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":f"Tom{i}"})
-    print(str(dt.now()))
+    # print(str(dt.now()))
+    # with table.batch(batch_size=1000) as batch:
+    #     for i in range(0,10):
+    #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":f"Tom{i}"})
+    # print(str(dt.now()))
 
 
 
@@ -179,5 +185,5 @@ if __name__=="__main__":
 
 
     print(str(dt.now()))
-    delete_all(hbase["table"])
+    delete_all(tables[3],"CUST_ID")
     print(str(dt.now()))
