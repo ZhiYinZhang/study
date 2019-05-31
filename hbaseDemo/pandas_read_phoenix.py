@@ -30,15 +30,10 @@ if __name__=="__main__":
     conn = phoenixdb.connect(database_url, max_retries=3, autocommit=True)
     cursor = conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
 
-    sql="select cust_id from tobacco.retail"
+    sql="select count(distinct(cust_id)),classify_level1_code from tobacco.warning_code group by classify_level1_code"
 
 
     df=pandas_read_phoenix(cursor, sql)
 
 
-    # df=df.replace(to_replace="None",value="0")
-    # df["ORDER_COMPETITIVE_INDEX"]=df["ORDER_COMPETITIVE_INDEX"].astype('float')
-    # print(df[df.ORDER_COMPETITIVE_INDEX>1])
-
-
-    df.to_csv("E:\dataset\cust_id.csv",index=False)
+    print(df)

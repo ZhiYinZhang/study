@@ -21,45 +21,6 @@ hbase={"table":"TOBACCO.WARNING_CODE","families":["0"],"row":"cust_id"}
 # hbase={"table":"test1","families":["0"],"row":"cust_id"}
 
 
-#-----近30天零售户订货量与当月周边人流数量不符
-def get_qty_vfr_except():
-    print(f"{str(dt.now())}  近30天零售户订货量与当月周边人流数量不符")
-    area_code = get_area(spark).dropDuplicates(["com_id", "sale_center_id"]).select("com_id", "sale_center_id", "city")
-    co_cust = get_valid_co_cust(spark).select("cust_id", "com_id", "sale_center_id") \
-        .join(area_code, ["com_id", "sale_center_id"])
-
-    # 距离cust_id1最近的30个零售户cust_id0
-    near_cust = get_near_cust(spark).select("cust_id1", "cust_id0")
-    cust_cluster=get_cust_cluster(spark)
-
-
-    #零售户近30天订货量
-    qty_sum = get_co_co_01(spark, [0, 30]).groupBy("cust_id") \
-                           .agg(f.sum("qty_sum").alias("qty_sum"))
-
-    #获取周边人流
-    around_vfr = get_around_vfr(spark)
-
-    cols = {"value": "stream_avg_orders",
-            "level1_code": "classify_level1_code",
-            }
-    vfr_avg_qty = qty_sum.join(around_vfr, "cust_id") \
-        .withColumn(cols["value"], col("qty_sum") / col("avg_vfr")) \
-        .select("cust_id", cols["value"])
-
-
-    except_cust = around_except_grade(near_cust, vfr_avg_qty,cust_cluster, cols, grade=[3, 4, 5]) \
-                                .join(co_cust, "cust_id") \
-                                .withColumn(cols["level1_code"], f.lit("YJFL001"))
-    values = [
-                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
-                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
-                 "warning_level_code", "cust_id", "city", "sale_center_id"
-             ] + list(cols.values())
-    except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
-
-
-
 
 
 #-----近30天零售户订货量与同等人流等级零售店订货量不符
@@ -302,6 +263,53 @@ def get_around_item_except():
 
 
 
+
+
+
+
+
+# -----近30天零售户订货量与当月周边人流数量不符
+def get_qty_vfr_except():
+    print(f"{str(dt.now())}  近30天零售户订货量与当月周边人流数量不符")
+    area_code = get_area(spark).dropDuplicates(["com_id", "sale_center_id"]).select("com_id", "sale_center_id", "city")
+    co_cust = get_valid_co_cust(spark).select("cust_id", "com_id", "sale_center_id") \
+        .join(area_code, ["com_id", "sale_center_id"])
+
+    cust_cluster = get_cust_cluster(spark)
+
+    # 零售户近30天订货量
+    qty_sum = get_co_co_01(spark, [0, 30]).groupBy("cust_id") \
+        .agg(f.sum("qty_sum").alias("qty_sum"))
+
+    # 获取周边人流
+    around_vfr = get_around_vfr(spark)
+
+    cols = {"value": "stream_avg_orders",
+            "level1_code": "classify_level1_code",
+            }
+    vfr_avg_qty = qty_sum.join(around_vfr, "cust_id") \
+        .withColumn(cols["value"], col("qty_sum") / col("avg_vfr")) \
+        .join(cust_cluster, "cust_id") \
+        .select("city", "cust_id", "cluster_index", cols["value"])
+
+    except_cust = except_grade(vfr_avg_qty, cols, ["city", "cluster_index"], [3, 4, 5]) \
+        .join(co_cust, "cust_id") \
+        .withColumn(cols["level1_code"], f.lit("YJFL001"))
+
+    values = [
+                 "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
+                 "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
+                 "warning_level_code", "cust_id", "city", "sale_center_id"
+             ] + list(cols.values())
+
+    except_cust.foreachPartition(lambda x: write_hbase2(x, values, hbase))
+
+
+#     except_cust = around_except_grade(near_cust, vfr_avg_qty,cust_cluster, cols, grade=[3, 4, 5]) \
+#                                 .join(co_cust, "cust_id") \
+#                                 .withColumn(cols["level1_code"], f.lit("YJFL001"))
+
+
 #-----近30天零售户档位与周边消费水平不符
 def get_grade_cons_except():
     print(f"{str(dt.now())} 近30天零售户档位与周边消费水平不符")
@@ -330,7 +338,7 @@ def get_grade_cons_except():
                              .join(cust_cluster,"cust_id")\
                              .select("city","cust_id","cust_seg","cluster_index","sale_center_id",cols["value"])
 
-        result=except_grade(cust_seg_cons,cols,["city","cust_seg","cluster_index"],[2,3,4])\
+        result=except_grade(cust_seg_cons,cols,["city","cust_seg","cluster_index"],[3,4,5])\
                 .withColumnRenamed("cust_seg","retail_grade")\
                 .withColumnRenamed("mean","city_grade_cons_avg") \
                 .withColumn(cols["level1_code"], f.lit("YJFL003"))

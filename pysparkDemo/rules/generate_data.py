@@ -19,8 +19,9 @@ sc.setLogLevel("WARN")
 def generate_near_cust():
     """
       生成距离零售户最近的同市100个零售户 存入hdfs
+      YJFL001指标
       更新:零售户经纬度数据变化
-      用时40m
+      用时40m  driver-memory 10g executor-memory 20g num-executors 5 executor-cores 4
     :param spark:
     :return:
     """
@@ -66,6 +67,7 @@ def generate_around_vfr(around):
     零售户周边人流数=零售户半径500m范围内平均人流
     平均人流=近30天所有记录中距离中心点最近的100个观测记录的均值（距离不超过500m，若不足100个则有多少算多少）
     更新:人流数据变化/零售户经纬度
+    用时:23m  driver-memory 10g executor-memory 20g num-executors 5 executor-cores 4
     """
     print(f"{str(dt.now())} 零售户周边人流数")
     try:
@@ -107,9 +109,9 @@ generate_around_vfr(0.5)
 
 def generate_all_cust_cons():
     """
-      根据有消费水平的零售户cust_id0 去 生成没有消费水平的零售户cust_id1的消费水平
+      得到所有零售户消费水平:根据有消费水平的零售户cust_id0 去 生成没有消费水平的零售户cust_id1的消费水平
       更新:零售户经纬度/[租金,餐饮,酒店]变化
-
+      用时:11m  driver-memory 10g executor-memory 20g num-executors 5 executor-cores 4
       1.获取没有消费水平的零售户
       2.获取没有消费水平的零售户的经纬度
       3.获取有消费水平的零售户的经纬度

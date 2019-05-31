@@ -7,6 +7,8 @@ from pyspark.sql.functions import col
 from pyspark import StorageLevel
 import time
 from datetime import datetime as dt
+from pysparkDemo.rules.write_hbase import write_hbase2
+import os
 if __name__=="__main__":
     spark: SparkSession = SparkSession.builder \
         .appName("demo") \
@@ -16,11 +18,32 @@ if __name__=="__main__":
     sc = spark.sparkContext
     sc.setLogLevel("WARN")
 
-    path="E:\资料\project\烟草\租金餐饮酒店\\food"
-    hotel1=spark.read.csv(path+"\shaoyang_food_0516.csv",header=True)
-    hotel2 = spark.read.csv(path + "\yueyang_food_0516.csv", header=True)
+    df=spark.range(10)
 
-    hotel=hotel1.unionByName(hotel2)
+    root_dir = "E:\资料\project\烟草\外部数据\人流数据"
+    # 人流数据
+    shaoyang_vfr_path = os.path.join(root_dir, "shaoyang")
+    yueyang_vfr_path = os.path.join(root_dir, "yueyang")
+    zhuzhou_vfr_path = os.path.join(root_dir, "zhuzhou")
+
+    shaoyang_vfr = spark.read.csv(shaoyang_vfr_path, header=True)\
+                            .withColumn("cityname",f.lit("邵阳市"))\
+                             .withColumn("citycode", f.lit("430500"))
+    yueyang_vfr = spark.read.csv(yueyang_vfr_path, header=True)\
+                             .withColumn("cityname", f.lit("岳阳市"))\
+                             .withColumn("citycode", f.lit("430600"))
+    zhuzhou_vfr = spark.read.csv(zhuzhou_vfr_path, header=True)\
+                             .withColumn("cityname", f.lit("株洲市"))\
+                             .withColumn("citycode", f.lit("430200"))
+
+    vfr = shaoyang_vfr.unionByName(yueyang_vfr).unionByName(zhuzhou_vfr)
+
+    result=vfr.withColumn("date",f.to_timestamp(col("time"),"yyyyMMdd_HHmmss"))\
+                .withColumn("weekday",f.dayofweek(col("date")))\
+                .withColumn("hour",f.hour(col("date")))\
+                .withColumn("time_week",f.when(col("weekday")==1,"周末").when(col("hour")>12,"下午").when(col("hour")<12,"上午"))
+
+    hbase = {"table": "PEOPLE_STREAM", "families": ["0"], "row": "cust_id"}
+    result.foreachPartition(lambda x:write_hbase2(x,["count","wgs_lng","wgs_lat","time","cityname","citycode","time_week"],hbase))
 
 
-    hotel.repartition(1).write.csv("E:\资料\project\烟草\租金餐饮酒店\\food\\test",header=True,mode="overwrite")

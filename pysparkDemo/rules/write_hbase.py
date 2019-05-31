@@ -6,8 +6,7 @@ import numpy as np
 import happybase
 from happybase import Table
 import uuid
-hbase_host="10.72.32.26"
-hbase_pool_size=10
+from pysparkDemo.rules.config import hbase_host,hbase_pool_size
 
 
 def write_hbase(rows,hbase):
@@ -49,7 +48,7 @@ def write_hbase1(rows,cols,hbase):
     :param cols:   list[colName] 需要写入hbase的DataFrame的列 并且与hbase的列名对应
     :param hbase: {"table":hbase_tableName,"row":row_key,"families":[fly_col1]}
                    table  hbase中的表
-                   row    DataFrame中为做row key的列
+                   row    DataFrame中为row key的列
                    families hbase中的列族
     """
     pool = happybase.ConnectionPool(host=hbase_host, size=hbase_pool_size)
@@ -75,7 +74,6 @@ def write_hbase2(rows,cols,hbase):
     :param cols:   list[colName] 需要写入hbase的DataFrame的列 并且与hbase的列名对应
     :param hbase: {"table":hbase_tableName,"row":row_key,"families":[fly_col1]}
                    table  hbase中的表
-                   row    DataFrame中为做row key的列
                    families hbase中的列族
     """
     pool = happybase.ConnectionPool(host=hbase_host, size=hbase_pool_size)
@@ -123,6 +121,7 @@ def pd_write_hbase(df:pd.DataFrame,cols:list):
                         batch.put(row=str(row_key), data=data)
             except Exception as e:
                 print(e.args)
+
 
 def delete_all(table_name,column):
     """

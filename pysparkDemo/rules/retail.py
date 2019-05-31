@@ -25,6 +25,14 @@ hbase={"table":"TOBACCO.RETAIL","families":["0"],"row":"cust_id"}
 
 
 # --------------------------------------------------------retail（零售户信息）基本信息---------------------------------------------
+def update_cust_status():
+    cities = ["011114305", "011114306", "011114302"]
+    co_cust = spark.sql(
+        "select cust_id,status from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)") \
+        .where(col("com_id").isin(cities))
+    co_cust.foreachPartition(lambda x:write_hbase1(x,["status"],hbase))
+
+
 def get_cust_info():
     co_cust_cols=["cust_id","cust_name","cust_seg","status","pay_type","license_code","manager","identity_card_id",
                   "order_tel","inv_type","order_way","periods","busi_addr","work_port","base_type","sale_scope",
@@ -63,7 +71,7 @@ def get_cust_info():
             crm_cust = crm_cust.withColumnRenamed(key, crm_cust_renamed[key])
 
 
-        cust_info=crm_cust.join(co_cust, "cust_id","left")\
+        cust_info=co_cust.join(crm_cust, "cust_id","left")\
                           .join(ldm_cust,"cust_id","left")\
                           .join(ldm_cust_dist,"cust_id","left")
         cols=cust_info.columns
@@ -308,7 +316,9 @@ def get_cust_index():
 """
 def get_consume_level_index():
     try:
-        consume_level_df=get_all_consume_level(spark)
+        co_cust=get_co_cust(spark).select("cust_id")
+        consume_level_df=get_all_consume_level(spark)\
+                                            .join(co_cust,"cust_id")
 
         max_df = consume_level_df.groupBy("city").agg(f.max("consume_level").alias("max"))
 
@@ -335,12 +345,14 @@ visitor flow rate
 """
 def get_vfr_index():
     print(f"{str(dt.now())}   visitor flow rate index")
-    avg_vfr=get_around_vfr(spark)
+    co_cust=get_co_cust(spark).select("cust_id")
+    avg_vfr=get_around_vfr(spark)\
+                           .join(co_cust,"cust_id")
 
     #每个城市的最大值
     max_vfr = avg_vfr.groupBy("city").agg(f.max("avg_vfr").alias("max_vfr"))
 
-    colName="people_cuont"
+    colName="people_count"
     avg_vfr.join(max_vfr, "city") \
             .withColumn(colName, col("avg_vfr") / col("max_vfr") * 5) \
             .foreachPartition(lambda x:write_hbase1(x,[colName],hbase))
@@ -404,6 +416,7 @@ def get_cpt_index():
         # 店铺竞争指数
         colName = "order_competitive_index"
         cust_cpt.join(max_cpt, "city1") \
+                .withColumnRenamed("cust_id1","cust_id")\
                 .withColumn(colName, (col("cust_cpt") - col("min_cpt")) / (col("max_cpt") - col("min_cpt")) * 5) \
                 .foreachPartition(lambda x:write_hbase1(x,[colName],hbase))
     except Exception:

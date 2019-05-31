@@ -141,7 +141,7 @@ if __name__=="__main__":
             "TOBACCO.AREA","TOBACCO.RETAIL",
             "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
             "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
-    hbase["table"]=tables[3]
+    hbase["table"]=tables[4]
 
     hbase["families"] = "0"
 
@@ -151,29 +151,28 @@ if __name__=="__main__":
     conn=happybase.Connection(host=hbase["host"])
     table=conn.table(hbase["table"])
 
-    # table.delete(columns={"0:age"})
 
+    #写数据
     # print(str(dt.now()))
     # with table.batch(batch_size=1000) as batch:
-    #     for i in range(0,10):
-    #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,100)}","0:name":f"Tom{i}"})
+    #     for i in range(0,80000):
+    #         batch.put(row=f"{i}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
     # print(str(dt.now()))
 
 
-
-    # cols = {"value": "stream_avg_orders",
-    #         "level1_code": "classify_level1_code"
-    #         }
-    # values = [
-    #          "avg_orders_plus3", "avg_orders_minu3", "avg_orders_plus4",
-    #          "avg_orders_minu4", "avg_orders_plus5", "avg_orders_minu5",
-    #          "warning_level_code", "cust_id", "city", "sale_center_id"
-    #          ] + list(cols.values())
-    #
-    # cols = ["primary_industry_add"]
-    # rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=1300)
-    # for row in rows:
-    #         print(row)
+    #读数据
+    cols = {
+        "value": "qty_sum",
+        "abnormal": "sum_abno_time",
+        "mean_plus_3std": "last_sum_plus3",
+        "mean_minus_3std": "last_sum_minu3",
+        "mean": "last_sum_mean"
+    }
+    values = list(cols.values())
+    cols = values
+    rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=100)
+    for row in rows:
+            print(row)
             # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
 
 
@@ -184,6 +183,6 @@ if __name__=="__main__":
     # print(str(dt.now()))
 
 
-    print(str(dt.now()))
-    delete_all(tables[3],"CUST_ID")
-    print(str(dt.now()))
+    # print(str(dt.now()))
+    # delete_all(tables[3],"CUST_ID")
+    # print(str(dt.now()))

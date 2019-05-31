@@ -25,7 +25,7 @@ hbase={"table":"TOBACCO.RETAIL_WARNING","families":["0"],"row":"cust_id"}
 def get_cust_name():
     get_valid_co_cust(spark).select("cust_id","cust_name")\
                   .foreachPartition(lambda x:write_hbase1(x,["cust_name"],hbase))
-get_cust_name()
+# get_cust_name()
 
 
 
@@ -41,12 +41,11 @@ def get_city_county():
         co_cust.join(area_code,["com_id","sale_center_id"])\
                .withColumnRenamed("城市","city")\
                .withColumnRenamed("区","county")\
-               .withColumnRenamed("sale_center_id","abcode")\
-               .foreachPartition(lambda x: write_hbase1(x, ["abcode","city","county"],hbase))
+               .foreachPartition(lambda x: write_hbase1(x, ["sale_center_id","city","county"],hbase))
     except Exception as e:
         tb.print_exc()
 
-get_city_county()
+# get_city_county()
 
 
 
@@ -73,7 +72,7 @@ def get_lng_lat():
     except Exception as e:
        tb.print_exc()
 
-get_lng_lat()
+# get_lng_lat()
 
 
 
@@ -199,7 +198,7 @@ def one_card_multi_cust():
         tb.print_exc()
 
 
-one_card_multi_cust()
+# one_card_multi_cust()
 
 
 
@@ -255,7 +254,7 @@ def get_grade_except():
         tb.print_exc()
 
 
-get_grade_except()
+# get_grade_except()
 
 
 
@@ -326,7 +325,7 @@ def get_mon_order_except():
     except Exception as e:
         tb.print_exc()
 
-get_mon_order_except()
+# get_mon_order_except()
 
 
 
@@ -475,7 +474,7 @@ def get_mon_item_except():
     except Exception as e:
         tb.print_exc()
 
-get_mon_item_except()
+# get_mon_item_except()
 
 
 
@@ -629,7 +628,7 @@ def get_around_class_except():
     except Exception as e:
         tb.print_exc()
 
-get_around_class_except()
+# get_around_class_except()
 
 
 
@@ -724,7 +723,7 @@ def get_high_cons_level():
     except Exception:
         tb.print_exc()
 
-get_high_cons_level()
+# get_high_cons_level()
 
 
 

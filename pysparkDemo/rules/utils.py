@@ -179,14 +179,12 @@ def is_except(df,cols:dict,groupBy:list):
 
 
 
-def get_all_consume_level(spark):
-    path="/user/entrobus/tobacco_data/cust_consume_level/"
-    consume_level_df=spark.read.csv(path=path,header=True)
-    return consume_level_df
+
 def get_consume_level(spark):
     """
        零售户周边(1km)消费水平
        由于外部数据的不足，只有部分零售户有消费水平
+       generate_data#generate_all_cust_cons生成所有的零售户的消费水平
     :param spark: SparkSession
     :return:
     """
@@ -664,7 +662,7 @@ def get_city_ppl(spark):
 def get_near_cust(spark):
     """
      generate_data.py#generate_near_cust(spark)生成的
-     在YJFL001指标
+     YJFL001指标
      获取距离零售户最近的30个零售户
     :param spark:
     :return:
@@ -688,8 +686,17 @@ def get_around_vfr(spark):
     平均人流=近30天所有记录中距离中心点最近的100个观测记录的均值（距离不超过500m，若不足100个则有多少算多少）
     """
     path="/user/entrobus/tobacco_data/cust_avg_vfr"
-    avg_vfr=spark.read.csv(header=True,path=path)
+    avg_vfr=spark.read.csv(header=True,path=path)\
+                   .withColumn("avg_vfr",col("avg_vfr").cast("float"))
     return avg_vfr
+
+
+def get_all_consume_level(spark):
+    #获取所有的零售户的消费水平
+    path="/user/entrobus/tobacco_data/cust_consume_level/"
+    consume_level_df=spark.read.csv(path=path,header=True)\
+                                 .withColumn("consume_level",col("consume_level").cast("float"))
+    return consume_level_df
 
 
 def get_cust_cluster(spark):

@@ -32,7 +32,7 @@ if __name__=="__main__":
     while len(succ)==0:
        print(f"第{num}次")
        try:
-            succ=cli.upload("zhangzy/dataset/","E:\dataset\cust_id.csv",True)
+            succ=cli.upload("/user/entrobus/tobacco_data_530/rent_food_hotel/","E:\资料\project\烟草\外部数据\租金餐饮酒店/hotel.csv",overwrite=True)
        except Exception as e:
             tb.print_exc()
        num+=1
