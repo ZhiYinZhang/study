@@ -20,7 +20,7 @@ if __name__=="__main__":
 
     df=spark.range(10)
 
-    root_dir = "E:\资料\project\烟草\外部数据\人流数据"
+    root_dir = "E:\资料\project\烟草\外部数据\人流数据\\530"
     # 人流数据
     shaoyang_vfr_path = os.path.join(root_dir, "shaoyang")
     yueyang_vfr_path = os.path.join(root_dir, "yueyang")
@@ -38,11 +38,15 @@ if __name__=="__main__":
 
     vfr = shaoyang_vfr.unionByName(yueyang_vfr).unionByName(zhuzhou_vfr)
 
+
+
+    shaoyang_vfr.show()
+    yueyang_vfr.show()
     result=vfr.withColumn("date",f.to_timestamp(col("time"),"yyyyMMdd_HHmmss"))\
                 .withColumn("weekday",f.dayofweek(col("date")))\
                 .withColumn("hour",f.hour(col("date")))\
                 .withColumn("time_week",f.when(col("weekday")==1,"周末").when(col("hour")>12,"下午").when(col("hour")<12,"上午"))
-
+    #
     hbase = {"table": "PEOPLE_STREAM", "families": ["0"], "row": "cust_id"}
     result.foreachPartition(lambda x:write_hbase2(x,["count","wgs_lng","wgs_lat","time","cityname","citycode","time_week"],hbase))
 
