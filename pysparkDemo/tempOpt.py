@@ -47,7 +47,7 @@ if __name__=="__main__":
                 .withColumn("hour",f.hour(col("date")))\
                 .withColumn("time_week",f.when(col("weekday")==1,"周末").when(col("hour")>12,"下午").when(col("hour")<12,"上午"))
     #
-    hbase = {"table": "PEOPLE_STREAM", "families": ["0"], "row": "cust_id"}
+    hbase = {"table": "V530_.PEOPLE_STREAM", "families": ["0"], "row": "cust_id"}
     result.foreachPartition(lambda x:write_hbase2(x,["count","wgs_lng","wgs_lat","time","cityname","citycode","time_week"],hbase))
 
 

@@ -3,7 +3,7 @@
 # datetime:2019/5/30 9:31
 import os
 #hbase配置
-hbase_host="10.72.32.26"
+hbase_host="10.72.59.89"
 hbase_pool_size=10
 
 

@@ -3,9 +3,8 @@
 # datetime:2019/4/28 14:51
 import phoenixdb
 from phoenixdb import cursor
-import pandas as pd
-database_url="http://10.72.32.26:8765"
-conn=phoenixdb.connect(database_url,max_retries=3,autocommit=True)
+database_url="http://10.72.59.91:8765/"
+conn=phoenixdb.connect(database_url,autocommit=True)
 
 cursor=conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
 
@@ -20,9 +19,7 @@ sql4="select * from tobacco.warning_code limit 100"
 sql5="select * from people_stream limit 100"
 
 
-
-sql6="select avg_orders_plus4,avg_orders_minu4 from tobacco.warning_code where classify_level1_code='YJFL004'"
-cursor.execute(sql6)
+cursor.execute("select * from tobacco.retail limit 10")
 rows=cursor.fetchall()
 
 # 68756

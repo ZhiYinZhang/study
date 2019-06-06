@@ -4,7 +4,7 @@
 import happybase
 from happybase import Table
 from datetime import datetime as dt
-hbase={"host":"10.72.32.26","size":10,"table":"member3",
+hbase={"host":"10.72.59.89","size":10,"table":"member3",
        "row":"cust_id",
        "familys":["column_A","column_B"],  #本次要写的列族
        "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
@@ -173,7 +173,7 @@ if __name__=="__main__":
     rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=100)
     for row in rows:
             print(row)
-            # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
+            print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
 
 
 
