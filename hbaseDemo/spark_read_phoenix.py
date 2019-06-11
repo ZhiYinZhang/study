@@ -3,7 +3,8 @@
 # datetime:2019/6/4 17:38
 from pyspark.sql import SparkSession
 from pyspark import SparkContext
-
+#第一种:拷贝phoenix-4.14.2-HBase-1.3-client.jar到 {spark_home}/jars
+#第二种:指定spark.driver.extraClassPath，spark.executor.extraClassPath
 spark = SparkSession.builder.appName("spark hbase") \
     .master("local[*]") \
     .config("spark.driver.extraClassPath", "E://test/phoenix_dpd/*") \
@@ -12,9 +13,11 @@ spark = SparkSession.builder.appName("spark hbase") \
 sc:SparkContext = spark.sparkContext
 
 
+zkUrl="10.18.0.12:2181"
+table="table1"
 ph_df=spark.read.format("org.apache.phoenix.spark")\
-        .option("table","TOBACCO.AREA")\
-        .option("zkUrl","10.72.59.89:2181")\
+        .option("table",table)\
+        .option("zkUrl",zkUrl)\
         .load()
 
 

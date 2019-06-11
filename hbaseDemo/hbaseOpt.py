@@ -4,14 +4,7 @@
 import happybase
 from happybase import Table
 from datetime import datetime as dt
-hbase={"host":"10.72.59.89","size":10,"table":"member3",
-       "row":"cust_id",
-       "familys":["column_A","column_B"],  #本次要写的列族
-       "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
-        "1":"sum(qty_sum)","2":"sum(qty_sum)","4":"sum(qty_sum)","5":"sum(qty_sum)" # hbase的列 对应 DataFrame的列
-       }
 
-#
 def write_hbase(rows):
         pool=happybase.ConnectionPool(host=hbase["host"],size=hbase["size"])
         with pool.connection() as conn:
@@ -136,8 +129,15 @@ def delete_all(table_name,column):
                 batch.delete(row[0])
         print("size:",size)
 from  random import randint
+hbase={"host":"10.18.0.12","size":10,"table":"member3",
+       "row":"cust_id",
+       "familys":["column_A","column_B"],  #本次要写的列族
+       "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
+        "1":"sum(qty_sum)","2":"sum(qty_sum)","4":"sum(qty_sum)","5":"sum(qty_sum)" # hbase的列 对应 DataFrame的列
+       }
+
 if __name__=="__main__":
-    tables=["test1","test2",
+    tables=["table1","test2",
             "TOBACCO.AREA","TOBACCO.RETAIL",
             "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
             "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
@@ -152,28 +152,30 @@ if __name__=="__main__":
     table=conn.table(hbase["table"])
 
 
+
+
     #写数据
-    # print(str(dt.now()))
-    # with table.batch(batch_size=1000) as batch:
-    #     for i in range(0,80000):
-    #         batch.put(row=f"{i}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
-    # print(str(dt.now()))
+    print(str(dt.now()))
+    with table.batch(batch_size=1000) as batch:
+        for i in range(0,100):
+            batch.put(row=f"{i}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
+    print(str(dt.now()))
 
 
     #读数据
-    cols = {
-        "value": "qty_sum",
-        "abnormal": "sum_abno_time",
-        "mean_plus_3std": "last_sum_plus3",
-        "mean_minus_3std": "last_sum_minu3",
-        "mean": "last_sum_mean"
-    }
-    values = list(cols.values())
-    cols = values
-    rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=100)
-    for row in rows:
-            print(row)
-            print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
+    # cols = {
+    #     "value": "qty_sum",
+    #     "abnormal": "sum_abno_time",
+    #     "mean_plus_3std": "last_sum_plus3",
+    #     "mean_minus_3std": "last_sum_minu3",
+    #     "mean": "last_sum_mean"
+    # }
+    # values = list(cols.values())
+    # cols = values
+    # rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=100)
+    # for row in rows:
+    #         print(row)
+    #         print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
 
 
 

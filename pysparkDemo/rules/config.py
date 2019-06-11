@@ -7,6 +7,8 @@ hbase_host="10.72.59.89"
 hbase_pool_size=10
 
 
+cities = ["011114305", "011114306", "011114302"]
+
 #------hbase表
 #零售户画像表
 retail_table="TOBACCO.RETAIL"

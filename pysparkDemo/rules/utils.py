@@ -8,6 +8,7 @@ from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 from pyspark.sql import functions as f
 from pyspark.sql import Column,Window
+from pysparkDemo.rules.config import cities
 #---------------------------------------udf---------------------------------------
 def period(x,y):
     try:
@@ -580,7 +581,7 @@ def get_area(spark):
     :param spark:
     :return:
     """
-    cities = ["011114305", "011114306", "011114302"]
+
     path = "/user/entrobus/tobacco_data/saleCenterId_with_abcode/sale_center_id_abcode.csv"
     area_code = spark.read.csv(path=path, header=True) \
                 .where(col("com_id").isin(cities))\

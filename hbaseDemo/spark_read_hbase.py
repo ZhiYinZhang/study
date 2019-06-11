@@ -59,8 +59,10 @@ if __name__=="__main__":
         .getOrCreate()
     sc = spark.sparkContext
 
-    host = '10.72.59.89'
-    table = 'TOBACCO.AREA'
+    # host = '10.72.59.89'
+    host='10.18.0.12'
+    # table = 'TOBACCO.AREA'
+    table="table"
     conf = {"hbase.zookeeper.quorum": host,
             "hbase.mapreduce.inputtable": table,
             "hbase.client.scanner.timeout.period":"120000"
