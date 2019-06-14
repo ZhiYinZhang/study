@@ -5,7 +5,7 @@ import happybase
 from happybase import Table
 from datetime import datetime as dt
 
-def write_hbase(rows):
+def write_hbase(rows,hbase):
         pool=happybase.ConnectionPool(host=hbase["host"],size=hbase["size"])
         with pool.connection() as conn:
                table:Table=conn.table(hbase["table"])
@@ -21,9 +21,10 @@ def write_hbase(rows):
                except Exception as e:
                    print(e.args)
 
-def write_hbase1(rows, cols):
+def write_hbase1(rows,hbase,cols):
     """
     :param rows:  spark的DataFrame以foreachPartition方法  List[Row]
+    :param hbase: "host":"","table":"","row":"","cf":""
     :param cols:   DataFrame的列，直接以这个列名作为hbase的列名，所以要先将DataFrame的列名改成hbase中的列名
     :return:
     """
@@ -34,7 +35,7 @@ def write_hbase1(rows, cols):
             with table.batch(batch_size=1000) as batch:
                 for row in rows:
                     row_key = row[hbase["row"]]  # row key
-                    for family in hbase["familys"]:  # 列族
+                    for family in hbase["cf"]:  # 列族
                         data = {}
                         for c in cols:  # 列
                             fly_col = f"{family}:{c.upper()}"
@@ -129,7 +130,7 @@ def delete_all(table_name,column):
                 batch.delete(row[0])
         print("size:",size)
 from  random import randint
-hbase={"host":"10.18.0.12","size":10,"table":"member3",
+hbase={"host":"10.18.0.34","size":10,"table":"member3",
        "row":"cust_id",
        "familys":["column_A","column_B"],  #本次要写的列族
        "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
@@ -137,11 +138,11 @@ hbase={"host":"10.18.0.12","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    tables=["table1","test2",
+    tables=["test","test2",
             "TOBACCO.AREA","TOBACCO.RETAIL",
             "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
             "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
-    hbase["table"]=tables[4]
+    hbase["table"]=tables[0]
 
     hbase["families"] = "0"
 
@@ -155,11 +156,11 @@ if __name__=="__main__":
 
 
     #写数据
-    print(str(dt.now()))
-    with table.batch(batch_size=1000) as batch:
-        for i in range(0,100):
-            batch.put(row=f"{i}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
-    print(str(dt.now()))
+    # print(str(dt.now()))
+    # with table.batch(batch_size=1000) as batch:
+    #     for i in range(0,100):
+    #         batch.put(row=f"{i}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
+    # print(str(dt.now()))
 
 
     #读数据
@@ -171,11 +172,11 @@ if __name__=="__main__":
     #     "mean": "last_sum_mean"
     # }
     # values = list(cols.values())
-    # cols = values
-    # rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=100)
+    # cols = ["a","b","c"]
+    # rows = get(table_name=hbase["table"], family="cf", cols=cols, upper_case=False,limit=100)
     # for row in rows:
     #         print(row)
-    #         print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
+            # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
 
 
 

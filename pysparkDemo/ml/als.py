@@ -12,11 +12,11 @@ from pyspark.ml.feature import StringIndexer
 from pyspark.sql.types import *
 import os
 param = {
-    "data_dir": "E:\\test\\csv\\als\\part-00000.csv",
+    "data_dir": "E:\\test\\als",
     "result_dir": "/home/zhangzy/dataset/als/result",
-    "userCol": "cust_id",
-    "itemCol": "item_id",
-    "ratingCol": "ratings",
+    "userCol": "userId",
+    "itemCol": "movieId",
+    "ratingCol": "rating",
     "top": 30
 }
 

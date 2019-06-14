@@ -146,6 +146,10 @@ def consume_level(rent,food,hotel,rent_25,food_25,hotel_25):
 consume_level_udf=udf(consume_level,FloatType())
 
 
+#按照索引 获取数组中的值 从1开始
+element_at=udf(lambda x,y:x[y-1])
+
+
 
 
 

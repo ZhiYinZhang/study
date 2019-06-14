@@ -13,15 +13,15 @@ spark = SparkSession.builder.appName("spark hbase") \
 sc:SparkContext = spark.sparkContext
 
 
-zkUrl="10.18.0.12:2181"
-table="table1"
+zkUrl="10.18.0.34:2181"
+table="test"
 ph_df=spark.read.format("org.apache.phoenix.spark")\
         .option("table",table)\
         .option("zkUrl",zkUrl)\
         .load()
 
 
-# ph_df.show()
+ph_df.show()
 # ph_df.write.csv("e://test//retail",header=True,mode="overwrite")
 # ph_df.show()
 # ph_df.groupBy("SALE_CENTER_ID").count().show()
