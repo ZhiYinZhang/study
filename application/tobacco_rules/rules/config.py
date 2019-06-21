@@ -6,6 +6,7 @@ import os
 hbase_host="10.72.59.89"
 hbase_pool_size=10
 
+zkUrl="10.18.0.34:2181"
 
 cities = ["011114305", "011114306", "011114302"]
 
@@ -23,8 +24,14 @@ block_data_table="TOBACCO.BLOCK_DATA"
 #地区宏观经济指标表
 data_index_table="TOBACCO.DATA_INDEX"
 
-
-
+#品牌id映射表
+brand_table="V630_TOBACCO.BRAND_DATA"
+#卷烟动态画像表
+ciga_table="V630_TOBACCO.CIGA_PICTURE"
+#货源投放表
+goods_supply_table="V630_TOBACCO.GEARS_TOSS"
+#als 表
+als_table=""
 
 
 

@@ -7,7 +7,7 @@ from pyspark.sql import functions as f
 from pyspark.sql import Window
 from datetime import datetime as dt
 import traceback as tb
-from pysparkDemo.rules.utils import lng_l,lng_r,lat_u,lat_d,get_cust_lng_lat,get_consume_level,haversine
+from application.tobacco_rules.rules.utils import lng_l,lng_r,lat_u,lat_d,get_cust_lng_lat,get_consume_level,haversine
 
 
 spark = SparkSession.builder\

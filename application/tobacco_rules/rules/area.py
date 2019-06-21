@@ -6,10 +6,10 @@ from pyspark.sql.functions import col
 from pyspark.sql import functions as f
 from pyspark.sql import SparkSession
 from pyspark.sql import Window
-from pysparkDemo.rules.write_hbase import write_hbase1
+from application.tobacco_rules.rules.write_hbase import write_hbase1
 from datetime import datetime as dt
-from pysparkDemo.rules.utils import *
-from pysparkDemo.rules.config import area_table
+from application.tobacco_rules.rules.utils import *
+from application.tobacco_rules.rules.config import area_table
 
 """
 区域画像

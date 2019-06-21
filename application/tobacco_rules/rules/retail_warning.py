@@ -5,8 +5,8 @@ import traceback as tb
 from pyspark.sql import functions as f
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
-from pysparkDemo.rules.write_hbase import write_hbase1
-from pysparkDemo.rules.utils import *
+from application.tobacco_rules.rules.write_hbase import write_hbase1
+from application.tobacco_rules.rules.utils import *
 from pyspark.sql import Window
 from datetime import datetime as dt
 

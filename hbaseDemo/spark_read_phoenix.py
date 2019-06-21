@@ -14,7 +14,7 @@ sc:SparkContext = spark.sparkContext
 
 
 zkUrl="10.18.0.34:2181"
-table="test"
+table="v630_tobacco.ciga_static"
 ph_df=spark.read.format("org.apache.phoenix.spark")\
         .option("table",table)\
         .option("zkUrl",zkUrl)\

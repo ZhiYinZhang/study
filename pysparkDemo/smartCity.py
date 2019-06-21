@@ -1,50 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # datetime:2019/1/29 16:48
-from pysparkDemo.predict_rent import *
+from pyspark.sql import SparkSession,Window
+from pyspark.sql.functions import col
+from pyspark.sql import functions as f
+from datetime import datetime as dt
+from hbaseDemo.hbaseOpt import write_hbase1
 
-from pyspark.sql.types import StructType
-
-
-def f(iterators):
-
-    print(type(iterators))
-
-    return iterators
-
-filePath = "E:\\test\\csv\\smart"
 
 spark = SparkSession.builder \
             .appName("smartCity")\
+            .config("spark.sql.execution.arrow.enabled","true") \
             .master("local[3]")\
             .getOrCreate()
 
-params =[
-      ("rent_id","string"),
-    ("address", "string"),
-    ("rent", "string"),
-    ("rent_type", "string"),
-    ("area", "string"),
-    ("decorate", "string"),
-    ("longitude", "string"),
-    ("latitude", "string"),
-    ("county_id", "string")]
+df=spark.read.csv("E:\pythonProject\jupyter/cigar_sales_need0.csv",header=True)
 
-schema = StructType()
-for param in params:
-    schema.add(param[0],param[1])
+hbase={"host":"10.18.0.34","size":10,"table":"V630_TOBACCO.BRAND_DATA",
+       "row":"brand_id",
+       "families":["0"]}
 
 
-df_1 = spark.readStream \
-     .format("csv") \
-     .option("header","true") \
-     .schema(schema) \
-     .load(filePath)
-
-
-df_1 = df_1.repartition(1)
-
-
-
-df_1.writeStream.foreach
-
+df.withColumn("brand_name", f.element_at(f.split("item_name", "\("),1))\
+    .select("brand_name")\
+    .distinct()\
+    .withColumn("brand_id",f.row_number().over(Window.orderBy("brand_name")))\
+    .withColumn("brand_id",col("brand_id").cast("string"))\
+     .foreachPartition(lambda x:write_hbase1(x,hbase,["brand_name"]))

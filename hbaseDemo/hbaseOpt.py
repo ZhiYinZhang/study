@@ -35,7 +35,7 @@ def write_hbase1(rows,hbase,cols):
             with table.batch(batch_size=1000) as batch:
                 for row in rows:
                     row_key = row[hbase["row"]]  # row key
-                    for family in hbase["cf"]:  # 列族
+                    for family in hbase["families"]:  # 列族
                         data = {}
                         for c in cols:  # 列
                             fly_col = f"{family}:{c.upper()}"
@@ -138,7 +138,7 @@ hbase={"host":"10.18.0.34","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    tables=["test","test2",
+    tables=["TEST","test2",
             "TOBACCO.AREA","TOBACCO.RETAIL",
             "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
             "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
@@ -158,8 +158,8 @@ if __name__=="__main__":
     #写数据
     # print(str(dt.now()))
     # with table.batch(batch_size=1000) as batch:
-    #     for i in range(0,100):
-    #         batch.put(row=f"{i}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
+    #     for i in range(0,1):
+    #         batch.put(row=f"{'abcdef'}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
     # print(str(dt.now()))
 
 
@@ -172,10 +172,10 @@ if __name__=="__main__":
     #     "mean": "last_sum_mean"
     # }
     # values = list(cols.values())
-    # cols = ["a","b","c"]
-    # rows = get(table_name=hbase["table"], family="cf", cols=cols, upper_case=False,limit=100)
-    # for row in rows:
-    #         print(row)
+    cols = ["BRAND_NAME"]
+    rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=False,limit=100)
+    for row in rows:
+            print(row)
             # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
 
 

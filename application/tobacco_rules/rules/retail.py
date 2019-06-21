@@ -8,8 +8,8 @@ from pyspark.sql import SparkSession
 from pyspark import SparkContext
 from datetime import datetime as dt
 from pyspark.sql import Window
-from pysparkDemo.rules.write_hbase import write_hbase1
-from pysparkDemo.rules.utils import *
+from application.tobacco_rules.rules.write_hbase import write_hbase1
+from application.tobacco_rules.rules.utils import *
 
 spark = SparkSession.builder\
                     .enableHiveSupport()\
@@ -554,7 +554,234 @@ def get_order_stats_info():
             tb.print_exc()
 
 # get_order_stats_info()
+def get_order_stats_info_monthly():
+    # 某零售户上个月订货总量
+    # 某零售户上个月的订货金额
+    # 某零售户上个月的订货条均价
+    # 某零售户上个月的订单数
+    # 某零售户上个月订货总量环比变化情况
+    # 某零售户上个月订货总金额环比变化情况
+    # 某零售户上个月订货条均价环比变化情况
+    co_co_01 = get_co_co_01(spark, scope=[0, 2], filter="month") \
+        .select("cust_id", "qty_sum", "amt_sum", "month_diff")
 
+    # 上个月
+    days = [1]
+    cols0 = {
+        "sum": ["sum_last_month"],
+        "amount": ["amount_last_month"],
+        "price": ["price_last_month"],
+        "orders": ["orders_last_month"],
+
+        "ring_sum": ["sum_ring_last_month"],
+        "ring_amount": ["amount_ring_last_month"],
+        "ring_price": ["price_ring_last_month"]
+    }
+    for i in range(len(days)):
+        try:
+            day = days[i]
+            sum_colName = cols0["sum"][i]
+            amount_colName = cols0["amount"][i]
+            price_colName = cols0["price"][i]
+            orders_colName = cols0["orders"][i]
+
+            day_filter = co_co_01.where(col("month_diff") == day)
+
+            print(f"{str(dt.now())}  上个月 订货总量")
+            try:
+                order_total = day_filter \
+                    .groupBy("cust_id") \
+                    .agg(f.sum("qty_sum").alias(sum_colName))
+                order_total.foreachPartition(lambda x: write_hbase1(x, [sum_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上个月 订货金额")
+            try:
+                amount_total = day_filter \
+                    .groupBy("cust_id") \
+                    .agg(f.sum("amt_sum").alias(amount_colName))
+                amount_total.foreachPartition(lambda x: write_hbase1(x, [amount_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上个月 订货条均价")
+            try:
+                avg_price = order_total.join(amount_total, "cust_id") \
+                    .withColumn(price_colName, col(amount_colName) / col(sum_colName))
+                avg_price.foreachPartition(lambda x: write_hbase1(x, [price_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上个月 订单数")
+            try:
+                day_filter.groupBy("cust_id") \
+                    .count() \
+                    .withColumnRenamed("count", orders_colName) \
+                    .foreachPartition(lambda x: write_hbase1(x, [orders_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            # -------------------------------------环比-----------------------------------
+            # (1,2]
+            day_filter = co_co_01.where(col("month_diff") == day + 1)
+
+            # 某零售户上次同期   订货总量
+            ring_order_total = day_filter \
+                .groupBy("cust_id") \
+                .agg(f.sum("qty_sum").alias("ring_qty_ord"))
+            # 某零售户上次同期   订货总金额
+            ring_amount_total = day_filter \
+                .groupBy("cust_id") \
+                .agg(f.sum("amt_sum").alias("ring_amt_sum"))
+            # 某零售户上次同期   订货均价
+            ring_avg_price = ring_order_total.join(ring_amount_total, "cust_id") \
+                .withColumn("ring_avg_price", col("ring_amt_sum") / col("ring_qty_ord"))
+
+            ring_sum_colName = cols0["ring_sum"][i]
+            ring_amount_colName = cols0["ring_amount"][i]
+            ring_price_colName = cols0["ring_price"][i]
+
+            print(f"{str(dt.now())}  上个月 订货总量环比变化情况")
+            try:
+                order_ring_ratio = ring_order_total.join(order_total, "cust_id") \
+                    .withColumn(ring_sum_colName, period_udf(col(sum_colName), col("ring_qty_ord")))
+                order_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_sum_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上个月 订货总金额环比变化情况")
+            try:
+                amount_ring_ratio = ring_amount_total.join(amount_total, "cust_id") \
+                    .withColumn(ring_amount_colName, period_udf(col(amount_colName), col("ring_amt_sum")))
+                amount_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_amount_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上个月 订货条均价环比变化情况")
+            try:
+                avg_price_ring_ratio = ring_avg_price.join(avg_price, "cust_id") \
+                    .withColumn(ring_price_colName, period_udf(col(price_colName), col("ring_avg_price")))
+                avg_price_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_price_colName], hbase))
+            except Exception:
+                tb.print_exc()
+        except Exception:
+            tb.print_exc()
+
+
+def get_order_stats_info_weekly():
+    # 某零售户上一周/上两周/上四周订货总量
+    # 某零售户上一周/上两周/上四周的订货金额
+    # 某零售户上一周/上两周/上四周的订货条均价
+    # 某零售户上一周/上两周/上四周的订单数
+    # 某零售户上一周/上两周/上四周订货总量环比变化情况
+    # 某零售户上一周/上两周/上四周订货总金额环比变化情况
+    # 某零售户上一周/上两周/上四周订货条均价环比变化情况
+    co_co_01 = get_co_co_01(spark, scope=[1, 5], filter="week") \
+        .select("cust_id", "qty_sum", "amt_sum", "week_diff")
+
+    # 上一周/上两周/上四周
+    days = [1, 2, 4]
+    cols0 = {
+        "sum": ["sum_last_week", "sum_last_two_week", "sum_last_four_week"],
+        "amount": ["amount_last_week", "amount_last_two_week", "amount_last_four_week"],
+        "price": ["price_last_week", "price_last_two_week", "price_last_four_week"],
+        "orders": ["orders_last_week", "orders_last_two_week", "orders_last_four_week"],
+
+        "ring_sum": ["sum_ring_last_week", "sum_ring_last_two_week", "sum_ring_last_four_week"],
+        "ring_amount": ["amount_ring_last_week", "amount_ring_last_two_week", "amount_ring_last_four_week"],
+        "ring_price": ["price_ring_last_week", "price_ring_last_two_week", "price_ring_last_four_week"]
+    }
+    for i in range(len(days)):
+        try:
+            day = days[i]
+            sum_colName = cols0["sum"][i]
+            amount_colName = cols0["amount"][i]
+            price_colName = cols0["price"][i]
+            orders_colName = cols0["orders"][i]
+
+            day_filter = co_co_01.where(col("week_diff") <= day)
+
+            print(f"{str(dt.now())}  上{day}周 订货总量")
+            try:
+                order_total = day_filter \
+                    .groupBy("cust_id") \
+                    .agg(f.sum("qty_sum").alias(sum_colName))
+                order_total.foreachPartition(lambda x: write_hbase1(x, [sum_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上{day}周 订货金额")
+            try:
+                amount_total = day_filter \
+                    .groupBy("cust_id") \
+                    .agg(f.sum("amt_sum").alias(amount_colName))
+                amount_total.foreachPartition(lambda x: write_hbase1(x, [amount_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上{day}周 订货条均价")
+            try:
+                avg_price = order_total.join(amount_total, "cust_id") \
+                    .withColumn(price_colName, col(amount_colName) / col(sum_colName))
+                avg_price.foreachPartition(lambda x: write_hbase1(x, [price_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上{day}周 订单数")
+            try:
+                day_filter.groupBy("cust_id") \
+                    .count() \
+                    .withColumnRenamed("count", orders_colName) \
+                    .foreachPartition(lambda x: write_hbase1(x, [orders_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            # -------------------------------------环比-----------------------------------
+            # (1,2] (1,3] (1,5]
+            day_filter = co_co_01.where((col("week_diff") > 1) & (col("week_diff") <= (1 + day)))
+
+            # 某零售户上次同期   订货总量
+            ring_order_total = day_filter \
+                .groupBy("cust_id") \
+                .agg(f.sum("qty_sum").alias("ring_qty_ord"))
+            # 某零售户上次同期   订货总金额
+            ring_amount_total = day_filter \
+                .groupBy("cust_id") \
+                .agg(f.sum("amt_sum").alias("ring_amt_sum"))
+            # 某零售户上次同期   订货均价
+            ring_avg_price = ring_order_total.join(ring_amount_total, "cust_id") \
+                .withColumn("ring_avg_price", col("ring_amt_sum") / col("ring_qty_ord"))
+
+            ring_sum_colName = cols0["ring_sum"][i]
+            ring_amount_colName = cols0["ring_amount"][i]
+            ring_price_colName = cols0["ring_price"][i]
+
+            print(f"{str(dt.now())}  上{day}周 订货总量环比变化情况")
+            try:
+                order_ring_ratio = ring_order_total.join(order_total, "cust_id") \
+                    .withColumn(ring_sum_colName, period_udf(col(sum_colName), col("ring_qty_ord")))
+                order_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_sum_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上{day}周 订货总金额环比变化情况")
+            try:
+                amount_ring_ratio = ring_amount_total.join(amount_total, "cust_id") \
+                    .withColumn(ring_amount_colName, period_udf(col(amount_colName), col("ring_amt_sum")))
+                amount_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_amount_colName], hbase))
+            except Exception:
+                tb.print_exc()
+
+            print(f"{str(dt.now())}  上{day}周 订货条均价环比变化情况")
+            try:
+                avg_price_ring_ratio = ring_avg_price.join(avg_price, "cust_id") \
+                    .withColumn(ring_price_colName, period_udf(col(price_colName), col("ring_avg_price")))
+                avg_price_ring_ratio.foreachPartition(lambda x: write_hbase1(x, [ring_price_colName], hbase))
+            except Exception:
+                tb.print_exc()
+        except Exception:
+            tb.print_exc()
 
 
 
@@ -792,6 +1019,291 @@ def get_ratio():
         tb.print_exc()
 # get_ratio()
 
+def get_ratio_monthly():
+    # 某零售户上个月，上3个月，上6个月，上12个月所订省内烟、省外烟、进口烟的占比（省内外烟）
+    # 零售户上上个月，上3个月，上6个月，上12个月订购数前5省内烟
+    # 零售户上上个月，上3个月，上6个月，上12个月订购数前5省外烟
+    # 某零售户上个月，上3个月，上6个月，上12个月所订卷烟价类占比
+    # 某零售户上上个月，上3个月，上6个月，上12个月所订卷烟价格分段占比
+    try:
+        co_co_line = get_co_co_line(spark, scope=[1, 12], filter="month") \
+            .select("cust_id", "item_id", "qty_ord", "price", "month_diff")
 
+        plm_item = get_plm_item(spark).select("item_id", "yieldly_type", "kind", "item_name")
+
+        line_plm = co_co_line.join(plm_item, "item_id")
+
+        # 总量
+        # 上个月
+        total_month_1 = co_co_line.where(col("month_diff") <= 1) \
+            .groupBy("cust_id") \
+            .agg(f.sum("qty_ord").alias("qty_ord")).coalesce(10)
+        # 上3个月
+        total_month_3 = co_co_line.where(col("month_diff") <= 3) \
+            .groupBy("cust_id") \
+            .agg(f.sum("qty_ord").alias("qty_ord")).coalesce(10)
+        # 上6个月
+        total_month_6 = co_co_line.where(col("month_diff") <= 6) \
+            .groupBy("cust_id") \
+            .agg(f.sum("qty_ord").alias("qty_ord")).coalesce(10)
+        # 上12个月
+        total_month_12 = co_co_line.where(col("month_diff") <= 12) \
+            .groupBy("cust_id") \
+            .agg(f.sum("qty_ord").alias("qty_ord")).coalesce(10)
+
+        days = {"1_month": 1, "3_month": 3, "6_month": 6, "12_month": 12}
+        days_total = {"1_month": total_month_1, "3_month": total_month_3,
+                      "6_month": total_month_6, "12_month": total_month_12}
+
+        # 省内 0  省外 1 国外 3
+        yieldly_types = ["0", "1", "3"]
+        cols1 = {
+            "1_month": ["in_prov_last_month", "out_prov_last_month", "import_last_month"],
+            "3_month": ["in_prov_last_three_month", "out_prov_last_three_month", "import_last_three_month"],
+            "6_month": ["in_prov_last_half_year", "out_prov_last_half_year", "import_last_half_year"],
+            "12_month": ["in_prov_last_year", "out_prov_last_year", "import_last_year"]
+        }
+        # 省内 0 省外 1 的top5
+        cols2 = {
+            "1_month": ["in_prov_top5_last_month", "out_prov_top5_last_month"],
+            "3_month": ["in_prov_top5_last_three_month", "out_prov_top5_last_three_month"],
+            "6_month": ["in_prov_top5_last_half_year", "out_prov_top5_last_half_year"],
+            "12_month": ["in_prov_top5_last_year", "out_prov_top5_last_year"]
+        }
+        # 1:一类,2:二类,3:三类,4:四类,5:五类,6:无价类
+        kinds = ["1", "2", "3", "4", "5", "6"]
+        cols3 = {
+            "1_month": ["price_ratio_last_month_1", "price_ratio_last_month_2", "price_ratio_last_month_3",
+                        "price_ratio_last_month_4", "price_ratio_last_month_5", "price_ratio_last_month_6"],
+            "3_month": ["price_ratio_last_three_month_1", "price_ratio_last_three_month_2",
+                        "price_ratio_last_three_month_3", "price_ratio_last_three_month_4",
+                        "price_ratio_last_three_month_5", "price_ratio_last_three_month_6"],
+            "6_month": ["price_ratio_last_half_year_1", "price_ratio_last_half_year_2", "price_ratio_last_half_year_3",
+                        "price_ratio_last_half_year_4", "price_ratio_last_half_year_5", "price_ratio_last_half_year_6"],
+            "12_month": ["price_ratio_last_year_1", "price_ratio_last_year_2", "price_ratio_last_year_3",
+                         "price_ratio_last_year_4", "price_ratio_last_year_5", "price_ratio_last_year_6"]
+        }
+        # 50以下；50（含）-100，100（含）-300，300（含）-500，500（含）以上
+        prices = [0, 50, 100, 300, 500]
+        cols4 = {
+            "1_month": ["price_sub_last_month_under50", "price_sub_last_month_50_to_100",
+                        "price_sub_last_month_100_to_300", "price_sub_last_month_300_to_500",
+                        "price_sub_last_month_up500"],
+            "3_month": ["price_sub_last_three_month_under50", "price_sub_last_three_month_50_to_100",
+                        "price_sub_last_three_month_100_to_300", "price_sub_last_three_month_300_to_500",
+                        "price_sub_last_three_month_up500"],
+            "6_month": ["price_sub_last_half_year_under50", "price_sub_last_half_year_50_to_100",
+                        "price_sub_last_half_year_100_to_300", "price_sub_last_half_year_300_to_500",
+                        "price_sub_last_half_year_up500"],
+            "12_month": ["price_sub_last_year_under50", "price_sub_last_year_50_to_100",
+                         "price_sub_last_year_100_to_300", "price_sub_last_year_300_to_500",
+                         "price_sub_last_year_up500"]
+        }
+
+        win = Window.partitionBy("cust_id").orderBy(f.desc("yieldly_type_qty_ord"))
+
+        for key in days.keys():
+            # 对应日期的烟总量
+            total_df = days_total[key]
+            # 日期过滤条件
+            day = days[key]
+
+            day_filter = line_plm.where(col("month_diff") <= day)
+
+            # -----某零售户上个月，上3个月，上6个月，上12个月所订省内烟、省外烟、进口烟的占比（省内外烟）
+            for i in range(len(yieldly_types)):
+                yieldly_type = yieldly_types[i]
+                yieldly_type_filter = day_filter.where(col("yieldly_type") == yieldly_type)
+
+                try:
+                    colName = cols1[key][i]
+                    print(f"{str(dt.now())}  yieldly_type:{yieldly_type} 上{day}个月省内烟、省外烟、进口烟的占比")
+                    yieldly_type_filter.groupBy("cust_id") \
+                        .agg(f.sum("qty_ord").alias("yieldly_type_qty_ord")) \
+                        .join(total_df, "cust_id") \
+                        .withColumn(colName, col("yieldly_type_qty_ord") / col("qty_ord")) \
+                        .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+                except Exception:
+                    tb.print_exc()
+
+                # -----零售户上上个月，上3个月，上6个月，上12个月订购数前5省内烟
+                # -----零售户上上个月，上3个月，上6个月，上12个月订购数前5省外烟
+
+                if yieldly_type in ["0", "1"]:
+                    try:
+                        print(f"{str(dt.now())}   yieldly_type:{yieldly_type} 上{day}个月省内烟、省外烟的top5")
+                        colName = cols2[key][i]
+                        top5 = yieldly_type_filter.groupBy("cust_id", "item_id") \
+                            .agg(f.sum("qty_ord").alias("yieldly_type_qty_ord")) \
+                            .withColumn("rank", f.row_number().over(win)) \
+                            .where(col("rank") <= 5)
+                        top5.join(plm_item, "item_id") \
+                            .groupBy("cust_id") \
+                            .agg(f.collect_list("item_name").alias(colName)) \
+                            .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+                    except Exception:
+                        tb.print_exc()
+
+            # -----某零售户上个月，上3个月，上6个月，上12个月所订卷烟价类占比
+            for i in range(len(kinds)):
+                kind = kinds[i]
+                kind_filter = day_filter.where(col("kind") == kind)
+                colName = cols3[key][i]
+                print(f"{str(dt.now())}  kind:{kind} 上{day}个月卷烟价类占比")
+                try:
+                    kind_filter.groupBy("cust_id") \
+                        .agg(f.sum("qty_ord").alias("kind_qty_ord")) \
+                        .join(total_df, "cust_id") \
+                        .withColumn(colName, col("kind_qty_ord") / col("qty_ord")) \
+                        .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+
+                except Exception:
+                    tb.print_exc()
+
+            # -----某零售户上上个月，上3个月，上6个月，上12个月所订卷烟价格分段占比
+            for i in range(len(prices)):
+                try:
+                    price = prices[i]
+                    colName = cols4[key][i]
+                    if price == 500:
+                        price_filter = day_filter.where(col("price") >= price)
+                        print(f"{str(dt.now())}  price:({price},∞],上{day}个月卷烟价格分段占比")
+                    else:
+                        price_filter = day_filter.where((col("price") >= price) & (col("price") < prices[i + 1]))
+                        print(f"{str(dt.now())}  price:({price},{prices[i+1]}],上{day}个月卷烟价格分段占比")
+
+                    price_filter.groupBy("cust_id") \
+                        .agg(f.sum("qty_ord").alias("price_qty_ord")) \
+                        .join(total_df, "cust_id", "left") \
+                        .withColumn(colName, col("price_qty_ord") / col("qty_ord")) \
+                        .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+                except Exception:
+                    tb.print_exc()
+    except Exception:
+        tb.print_exc()
+
+
+def get_ratio_weekly():
+    # 某零售户上1周所订省内烟、省外烟、进口烟的占比（省内外烟）
+    # 零售户上1周订购数前5省内烟
+    # 零售户上1周订购数前5省外烟
+    # 某零售户上1周所订卷烟价类占比
+    # 某零售户上1周所订卷烟价格分段占比
+    try:
+        co_co_line = get_co_co_line(spark, scope=[1, 1], filter="week") \
+            .select("cust_id", "item_id", "qty_ord", "price")
+
+        plm_item = get_plm_item(spark).select("item_id", "yieldly_type", "kind", "item_name")
+
+        line_plm = co_co_line.join(plm_item, "item_id")
+
+        # 上1周总量
+        total_week_1 = co_co_line.groupBy("cust_id").agg(f.sum("qty_ord").alias("qty_ord"))
+
+        days = {"1_week": 1}
+        days_total = {"1_week": total_week_1}
+
+        # 省内 0  省外 1 国外 3
+        yieldly_types = ["0", "1", "3"]
+        cols1 = {
+            "1_week": ["in_prov_last_week", "out_prov_last_week", "import_last_week"]
+        }
+        # 省内 0 省外 1 的top5
+        cols2 = {
+            "1_week": ["in_prov_top5_last_week", "out_prov_top5_last_week"]
+        }
+        # 1:一类,2:二类,3:三类,4:四类,5:五类,6:无价类
+        kinds = ["1", "2", "3", "4", "5", "6"]
+        cols3 = {
+            "1_week": ["price_ratio_last_week_1", "price_ratio_last_week_2", "price_ratio_last_week_3",
+                       "price_ratio_last_week_4", "price_ratio_last_week_5", "price_ratio_last_week_6"]
+        }
+        # 50以下；50（含）-100，100（含）-300，300（含）-500，500（含）以上
+        prices = [0, 50, 100, 300, 500]
+        cols4 = {
+            "1_week": ["price_sub_last_week_under50", "price_sub_last_week_50_to_100", "price_sub_last_week_100_to_300",
+                       "price_sub_last_week_300_to_500", "price_sub_last_week_up500"]
+        }
+
+        win = Window.partitionBy("cust_id").orderBy(f.desc("yieldly_type_qty_ord"))
+
+        for key in days.keys():
+            # 对应日期的烟总量
+            total_df = days_total[key]
+            # 日期过滤条件
+            day = days[key]
+
+            day_filter = line_plm.where(col("week_diff") == day)
+
+            # -----某零售户上1周所订省内烟、省外烟、进口烟的占比（省内外烟）
+            for i in range(len(yieldly_types)):
+                yieldly_type = yieldly_types[i]
+                yieldly_type_filter = day_filter.where(col("yieldly_type") == yieldly_type)
+
+                try:
+                    colName = cols1[key][i]
+                    print(f"{str(dt.now())}  yieldly_type:{yieldly_type},上一周省内、省外、进口烟的占比")
+                    yieldly_type_filter.groupBy("cust_id") \
+                        .agg(f.sum("qty_ord").alias("yieldly_type_qty_ord")) \
+                        .join(total_df, "cust_id") \
+                        .withColumn(colName, col("yieldly_type_qty_ord") / col("qty_ord")) \
+                        .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+                except Exception:
+                    tb.print_exc()
+
+                # -----零售户上1周订购数前5省内烟
+                # -----零售户上1周订购数前5省外烟
+                if yieldly_type in ["0", "1"]:
+                    try:
+                        print(f"{str(dt.now())}  yieldly_type:{yieldly_type},上一周top5")
+                        colName = cols2[key][i]
+                        top5 = yieldly_type_filter.groupBy("cust_id", "item_id") \
+                            .agg(f.sum("qty_ord").alias("yieldly_type_qty_ord")) \
+                            .withColumn("rank", f.row_number().over(win)) \
+                            .where(col("rank") <= 5)
+                        top5.join(plm_item, "item_id") \
+                            .groupBy("cust_id") \
+                            .agg(f.collect_list("item_name").alias(colName)) \
+                            .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+                    except Exception:
+                        tb.print_exc()
+
+            # -----某零售户上1周所订卷烟价类占比
+            for i in range(len(kinds)):
+                kind = kinds[i]
+                kind_filter = day_filter.where(col("kind") == kind)
+                colName = cols3[key][i]
+                print(f"{str(dt.now())}  kind:{kind},上一周卷烟价类占比")
+                try:
+                    kind_filter.groupBy("cust_id") \
+                        .agg(f.sum("qty_ord").alias("kind_qty_ord")) \
+                        .join(total_df, "cust_id") \
+                        .withColumn(colName, col("kind_qty_ord") / col("qty_ord")) \
+                        .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+
+                except Exception:
+                    tb.print_exc()
+
+            # -----某零售户上1周所订卷烟价格分段占比
+            for i in range(len(prices)):
+                try:
+                    price = prices[i]
+                    colName = cols4[key][i]
+                    if price == 500:
+                        price_filter = day_filter.where(col("price") >= price)
+                        print(f"{str(dt.now())}  price:({price},∞],上一周卷烟价格分段占比")
+                    else:
+                        price_filter = day_filter.where((col("price") >= price) & (col("price") < prices[i + 1]))
+                        print(f"{str(dt.now())}  price:({price},{prices[i+1]}],上一周卷烟价格分段占比")
+
+                    price_filter.groupBy("cust_id") \
+                        .agg(f.sum("qty_ord").alias("price_qty_ord")) \
+                        .join(total_df, "cust_id", "left") \
+                        .withColumn(colName, col("price_qty_ord") / col("qty_ord")) \
+                        .foreachPartition(lambda x: write_hbase1(x, [colName], hbase))
+                except Exception:
+                    tb.print_exc()
+    except Exception:
+        tb.print_exc()
 
 

@@ -4,8 +4,8 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 from pyspark.sql import functions as f
-from pysparkDemo.rules.utils import *
-from pysparkDemo.rules.write_hbase import  write_hbase1
+from application.tobacco_rules.rules.utils import *
+from application.tobacco_rules.rules.write_hbase import  write_hbase1
 
 
 

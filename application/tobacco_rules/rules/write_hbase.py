@@ -6,7 +6,7 @@ import numpy as np
 import happybase
 from happybase import Table
 import uuid
-from pysparkDemo.rules.config import hbase_host,hbase_pool_size
+from application.tobacco_rules.rules.config import hbase_host,hbase_pool_size
 
 
 def write_hbase(rows,hbase):

@@ -7,7 +7,7 @@ from pyspark.sql.functions import col
 from pyspark import StorageLevel
 import time
 from datetime import datetime as dt
-from pysparkDemo.rules.write_hbase import write_hbase2
+from application.tobacco_rules.rules import write_hbase2
 import os
 if __name__=="__main__":
     spark: SparkSession = SparkSession.builder \

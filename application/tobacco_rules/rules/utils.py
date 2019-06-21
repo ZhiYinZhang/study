@@ -7,8 +7,8 @@ from datetime import datetime as dt
 from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 from pyspark.sql import functions as f
-from pyspark.sql import Column,Window
-from pysparkDemo.rules.config import cities
+from pyspark.sql import Column
+from application.tobacco_rules.rules.config import cities,zkUrl
 #---------------------------------------udf---------------------------------------
 def period(x,y):
     try:
@@ -513,7 +513,9 @@ def get_co_co_line(spark,scope:list,filter="day"):
         .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
         .withColumn("today", f.current_date()) \
         .withColumn("qty_ord", col("qty_ord").cast("float")) \
-        .withColumn("price", col("price").cast("float"))
+        .withColumn("price", col("price").cast("float"))\
+         .withColumn("qty_rsn",col("qty_rsn").cast("float"))\
+         .withColumn("amt",col("amt").cast("float"))
 
     lower = scope[0]
     upper = scope[1]
@@ -658,7 +660,12 @@ def get_city_ppl(spark):
         df=df.union(dfs[i])
     return df
 
-
+def get_phoenix_table(spark,tableName):
+    ph_df=spark.read.format("org.apache.phoenix.spark")\
+            .option("table",tableName)\
+            .option("zkUrl",zkUrl)\
+            .load()
+    return ph_df
 
 
 

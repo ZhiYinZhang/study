@@ -21,7 +21,7 @@ def get_hdfs_client():
     cli = client.InsecureClient(url=hdfs_host,user=user,root=root)
 
     #kerberos 安全认证
-    # cli = KerberosClient("http://entrobus28:50070")
+    cli = KerberosClient("http://entrobus28:50070")
     return cli
 
 
@@ -30,8 +30,6 @@ if __name__=="__main__":
 
     print(cli.list("zhangzy"))
 
-    succ=''
-    num=1
     # while len(succ)==0:
     #    print(f"第{num}次")
     #    try:
