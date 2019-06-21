@@ -6,38 +6,46 @@ from pyspark.sql.functions import col
 from pyspark.sql import functions as f
 from datetime import datetime as dt
 import traceback as tb
-from application.tobacco_rules.rules.utils import get_co_co_line, week_diff, element_at, get_plm_item, get_area, get_phoenix_table, get_co_cust
-from application.tobacco_rules.rules.config import cities
+import json
+from application.tobacco_rules.rules.utils import *
+from application.tobacco_rules.rules.config import cities,ciga_table,brand_table,als_table
 from application.tobacco_rules.rules.write_hbase import write_hbase1
+from application.tobacco_rules.ml.cigar_rating import recommendForAllUsers
+from application.tobacco_rules.ml.similar_cigar import get_similar_cigar
+from application.tobacco_rules.ml.client_similar_cigar import get_client_similar_cigar
 
-spark = SparkSession.builder.enableHiveSupport().appName("tobacco").getOrCreate()
+spark=SparkSession.builder.enableHiveSupport().appName("cigar").getOrCreate()
 
 spark.sql("use aistrong")
 
-hbase = {"table": "TOBACCO.RETAIL", "families": ["0"], "row": "row"}
 
+hbase={"table":ciga_table,"families":["0"],"row":"row"}
 
-# 品牌统计指标
+#品牌统计指标
 
 def get_brand_stats_info_daily():
-    # 本月当前本市/区各品牌订货量
-    # 本月当前本市/区各品牌订单额
+    #本月当前本市/区各品牌订货量
+    #本月当前本市/区各品牌订单额
     # 烟品牌id，烟品牌名称
-    brand = get_phoenix_table(spark, "brand")
+    brand=get_phoenix_table(spark,brand_table)
 
     area = get_area(spark)
     # com_id与city的映射关系
     city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
     # sale_center_id与区(list)的映射关系
     county = area.groupBy("sale_center_id") \
-        .agg(f.collect_list("county").alias("county")) \
-        .select("sale_center_id", "county")
+                 .agg(f.collect_list("county").alias("county")) \
+                 .select("sale_center_id", "county")
+
+    # 标识列的值
     markers = ["0", "2"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    #除需要计算的值，其他的数据
     cols_comm = [["city", "brand_id", "brand_name", "ciga_data_marker"],
-                 ["county", "sale_center_id", "brand_id", "brand_name", "ciga_data_marker"]]
+                 [ "county", "sale_center_id", "brand_id", "brand_name", "ciga_data_marker"]]
+    #需要计算的值的列名
     cols = [["brand_city_orders", "brand_city_order_amount"], ["brand_county_orders", "brand_county_order_amount"]]
     for i in range(len(groups)):
         group = groups[i]
@@ -45,13 +53,13 @@ def get_brand_stats_info_daily():
         c = cols[i]
         marker = markers[i]
         try:
-            # 获取本月截止订单行表数据
-            co_co_line = get_co_co_line(spark, scope=[0, 0], filter="month") \
-                .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
-                .select("qty_ord", "amt", "", group)
-            # 本月每款烟在每个区的订单量,订单额
-            qty_amt = co_co_line.groupBy([group, "brand_name"]) \
-                .agg(f.sum(col("qty_ord")).alias(c[0]), f.sum(col("amt")).alias(c[1]))
+            #1.获取本月截止订单行表数据
+            co_co_line=get_co_co_line(spark,scope=[0,0],filter="month") \
+                        .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
+                        .select("qty_ord","amt","",group)
+            #2.本月每款烟在每个区的订单量,订单额
+            qty_amt=co_co_line.groupBy([group,"brand_name"])\
+                            .agg(f.sum(col("qty_ord")).alias(c[0]),f.sum(col("amt")).alias(c[1]))
 
             column = cols_comm[i] + c
             qty_amt.join(brand, "brand_name") \
@@ -62,14 +70,13 @@ def get_brand_stats_info_daily():
         except Exception:
             tb.print_exc()
 
-
 def get_brand_stats_info_monthly():
     # 市/区每款卷烟上一月销量/环比/同比
     # 市/区每款卷烟上一月订单数/环比/同比
     # 市/区每款卷烟上一月销量占比/环比/同比
 
     # 烟品牌id，烟品牌名称
-    brand = get_phoenix_table(spark, "brand")
+    brand = get_phoenix_table(spark, brand_table)
 
     area = get_area(spark)
     # com_id与city的映射关系
@@ -79,23 +86,25 @@ def get_brand_stats_info_monthly():
         .agg(f.collect_list("county").alias("county")) \
         .select("sale_center_id", "county")
 
+    # 标识列的值
     markers = ["0", "2"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    # 除需要计算的值，其他的数据
     cols_comm = [
         ["city", "brand_id", "brand_name", "ciga_data_marker"],
         ["county", "sale_center_id", "brand_id", "brand_name", "ciga_data_marker"]
     ]
+    #需要计算的值的列名
     cols = [
-        ["brand_city_month_sales", "brand_city_month_orders", "brand_city_month_sales_ratio",
-         "brand_city_month2_sales", "brand_city_month2_orders", "brand_city_month2_sales_ratio",
-         "brand_city_month_sales_last_year", "brand_city_month_orders_last_year", "brand_city_month_retio_last_year"
+        ["brand_city_month_sales","brand_city_month_orders","brand_city_month_sales_ratio",
+         "brand_city_month2_sales","brand_city_month2_orders","brand_city_month2_sales_ratio",
+         "brand_city_month_sales_last_year","brand_city_month_orders_last_year","brand_city_month_retio_last_year"
          ],
-        ["brand_county_month_sales", "brand_county_month_orders", "brand_county_month_sales_ratio",
-         "brand_county_month2_sales", "brand_county_month2_orders", "brand_county_month2_sales_ratio",
-         "brand_county_month_sales_last_year", "brand_county_month_orders_last_year",
-         "brand_county_month_retio_last_year"
+        ["brand_county_month_sales","brand_county_month_orders","brand_county_month_sales_ratio",
+         "brand_county_month2_sales","brand_county_month2_orders","brand_county_month2_sales_ratio",
+         "brand_county_month_sales_last_year","brand_county_month_orders_last_year","brand_county_month_retio_last_year"
          ]
     ]
 
@@ -103,7 +112,7 @@ def get_brand_stats_info_monthly():
         group = groups[i]
         join = joins[i]
         c = cols[i]
-        marker = markers[i]
+        marker=markers[i]
         try:
             # 获取上一个月订单行表数据
             co_co_line = get_co_co_line(spark, scope=[1, 1], filter="month") \
@@ -113,7 +122,7 @@ def get_brand_stats_info_monthly():
             # 1、2.市/区每款烟的订单量，订单数
             print(f"{str(dt.now())}  上一个月{group}每个品牌的订单量，订单数")
             qty_amt = co_co_line.groupBy(group, "brand_name").agg(f.sum(col("qty_ord")).alias(c[0]),
-                                                                  f.count(col(group)).alias(c[1]))
+                                                             f.count(col(group)).alias(c[1]))
 
             # 3.市/区每款卷烟销量占比
             print(f"{str(dt.now())}  上一个月{group}每个品牌的销量占比")
@@ -131,7 +140,7 @@ def get_brand_stats_info_monthly():
 
             # 市/区每款卷烟订单量，订单数 上次同期
             qty_amt_last = co_co_line.groupBy(group, "brand_name").agg(f.sum(col("qty_ord")).alias(c[3]),
-                                                                       f.count(col(group)).alias(c[4]))
+                                                                  f.count(col(group)).alias(c[4]))
             # 市/区每款卷烟销量占比 上次同期
             qty_ratio_last = co_co_line.groupBy(group) \
                 .agg(f.sum(col("qty_ord")).alias("qty_ord_total_last")) \
@@ -190,12 +199,11 @@ def get_brand_stats_info_monthly():
         except Exception:
             tb.print_exc()
 
-
 def get_brand_stats_info_weekly():
     # 市/区每款卷烟上一周销量/环比/同比
 
     # 烟品牌id，烟品牌名称
-    brand = get_phoenix_table(spark, "brand")
+    brand = get_phoenix_table(spark, brand_table)
 
     area = get_area(spark)
     # com_id与city的映射关系
@@ -205,17 +213,20 @@ def get_brand_stats_info_weekly():
         .agg(f.collect_list("county").alias("county")) \
         .select("sale_center_id", "county")
 
+    #标识列的值
     markers = ["0", "2"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    # 除需要计算的值，其他的数据
     cols_comm = [
         ["city", "brand_id", "brand_name", "ciga_data_marker"],
-        ["county", "sale_center_id", "brand_id", "brand_name", "ciga_data_marker"]
+        [ "county", "sale_center_id", "brand_id", "brand_name", "ciga_data_marker"]
     ]
+    # 需要计算的值的列名
     cols = [
-        ["brand_city_week_sales", "brand_city_week2_sales", "brand_city_week_sales_last_year"],
-        ["brand_county_week_sales", "brand_county_week2_sales", "brand_county_week_sales_last_year"]
+        ["brand_city_week_sales","brand_city_week2_sales","brand_city_week_sales_last_year"],
+        ["brand_county_week_sales","brand_county_week2_sales","brand_county_week_sales_last_year"]
     ]
 
     for i in range(len(groups)):
@@ -239,7 +250,7 @@ def get_brand_stats_info_weekly():
                 .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
                 .select("brand_name", group, "qty_ord")
 
-            # 市/区每款卷烟销量 上次同期
+            # 2.市/区每款卷烟销量 上次同期
             qty_amt_last = co_co_line.groupBy(group, "brand_name").agg(f.sum(col("qty_ord")).alias(c[1]))
 
             # # 2.市/区每款卷烟销量 环比
@@ -257,7 +268,7 @@ def get_brand_stats_info_weekly():
                 .withColumn("qty_ord", col("qty_ord").cast("float")) \
                 .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
                 .select("brand_name", group, "qty_ord")
-            # 市/区每款烟的订单量 去年
+            # 3.市/区每款烟的订单量 去年
             qty_ord_ly = last_year.groupBy(group, "brand_name") \
                 .agg(f.sum(col("qty_ord")).alias(c[2]))
             # # 3.市/区每款卷烟销量同比
@@ -265,8 +276,8 @@ def get_brand_stats_info_weekly():
             # qty_ord_ly.join(qty_amt, [group, "brand"]) \
             #     .withColumn("qty_ord_yoy", period_udf(col("qty_ord"), col("qty_ord_ly")))
 
-            all_df = qty_amt.join(qty_amt_last, [group, "brand_name"], "outer") \
-                .join(qty_ord_ly, [group, "brand_name"], "outer")
+            all_df=qty_amt.join(qty_amt_last,[group,"brand_name"],"outer")\
+                   .join(qty_ord_ly,[group,"brand_name"],"outer")
 
             column = cols_comm + c
             all_df.join(brand, "brand_name") \
@@ -278,11 +289,12 @@ def get_brand_stats_info_weekly():
             tb.print_exc()
 
 
+
 def get_item_ratio():
     # 市/区 同品牌各规格销量占比
 
     # 烟品牌id，烟品牌名称
-    brand = get_phoenix_table(spark, "brand")
+    brand = get_phoenix_table(spark, brand_table)
     # 烟id，烟名称
     plm_item = get_plm_item(spark).select("item_id", "item_name")
 
@@ -294,16 +306,19 @@ def get_item_ratio():
         .agg(f.collect_list("county").alias("county")) \
         .select("sale_center_id", "county")
 
+    #标识列的值
     markers = ["1", "3"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    # 除需要计算的值，其他的数据
     cols_comm = [
-        ["city", "brand_id", "brand_name", "ciga_id", "ciga_gauge", "ciga_data_marker"],
-        ["county", "sale_center_id", "brand_id", "brand_name", "ciga_id", "ciga_gauge", "ciga_data_marker"]
+        ["city", "brand_id", "brand_name","gauge_id","gauge_name", "ciga_data_marker"],
+        ["county", "sale_center_id", "brand_id", "brand_name","gauge_id","gauge_name", "ciga_data_marker"]
     ]
+    # 需要计算的值的列名
     cols = [
-        "city_brand_gauge_sales_ratio",
+       "city_brand_gauge_sales_ratio",
         "county_brand_gauge_sales_ratio"
     ]
 
@@ -313,82 +328,86 @@ def get_item_ratio():
         c = cols[i]
         marker = markers[i]
         try:
-            # 上个月同品牌各规格销量占比
+            # 1.上个月同品牌各规格销量占比
             co_co_line = get_co_co_line(spark, scope=[1, 1], filter="month") \
                 .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
-                .select("item_id", "brand_name", "qty_ord", group)
+                .select("item_id","brand_name", "qty_ord",group)
 
-            # 各市/区 各品牌销量
-            brand_ord = co_co_line.groupBy(group, "brand_name").agg(f.sum(col("qty_ord")).alias("brand_ord"))
-            # 各市/区 每个品牌各品规销量
-            item_ord = co_co_line.groupBy(group, "brand_name", "item_id").agg(f.sum(col("qty_ord")).alias("item_ord"))
-            # 销量占比
+            #2.各市/区 各品牌销量
+            brand_ord = co_co_line.groupBy(group,"brand_name").agg(f.sum(col("qty_ord")).alias("brand_ord"))
+            #3.各市/区 每个品牌各品规销量
+            item_ord = co_co_line.groupBy(group,"brand_name", "item_id").agg(f.sum(col("qty_ord")).alias("item_ord"))
+            #4.销量占比
             print(f"{str(dt.now())}  上一个月同品牌各品规的销量占比")
-            brand_item = brand_ord.join(item_ord, [group, "brand"]) \
+            brand_item=brand_ord.join(item_ord, [group,"brand"]) \
                 .withColumn(c, col("item_ord") / col("brand_ord"))
 
             column = cols_comm + c
-            brand_item.withColumn("row", f.concat_ws("_", col(group), col("item_id"))) \
-                .join(plm_item, "item_id") \
-                .join(brand, "brand_name") \
-                .join(join, group) \
-                .withColumn("ciga_data_marker", f.lit(marker)) \
-                .withColumnRenamed("item_id", "ciga_id") \
-                .withColumnRenamed("item_name", "ciga_gauge") \
-                .foreachPartition(lambda x: write_hbase1(x, column, hbase))
+            brand_item.withColumn("row",f.concat_ws("_",col(group),col("item_id"))) \
+                      .join(plm_item,"item_id")\
+                      .join(brand, "brand_name")\
+                      .join(join,group)\
+                      .withColumn("ciga_data_marker",f.lit(marker))\
+                      .withColumnRenamed("item_id","gauge_id")\
+                      .withColumnRenamed("item_name","gauge_name")\
+                      .foreachPartition(lambda x:write_hbase1(x,column,hbase))
         except Exception:
             tb.print_exc()
 
 
-# 品规统计指标
+
+
+#品规统计指标
 
 
 def get_item_stats_info_daily():
-    # 本月当前本市/区每款卷烟订货量
-    # 本月当前本市/区每款卷烟订单额
+    #本月当前本市/区每款卷烟订货量
+    #本月当前本市/区每款卷烟订单额
 
-    # 烟id，烟名称
-    plm_item = get_plm_item(spark).select("item_id", "item_name")
+    #烟id，烟名称
+    plm_item=get_plm_item(spark).select("item_id","item_name")
 
     area = get_area(spark)
-    # com_id与city的映射关系
-    city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
-    # sale_center_id与区(list)的映射关系
-    county = area.groupBy("sale_center_id") \
-        .agg(f.collect_list("county").alias("county")) \
-        .select("sale_center_id", "county")
-    markers = ["1", "3"]
-    # 按照 市或区统计
+    #com_id与city的映射关系
+    city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id","city")
+    #sale_center_id与区(list)的映射关系
+    county = area.groupBy("sale_center_id")\
+                        .agg(f.collect_list("county").alias("county"))\
+                        .select("sale_center_id","county")
+    #标识列的值
+    markers=["1","3"]
+    #按照 市或区统计
     groups = ["com_id", "sale_center_id"]
-    joins = [city, county]
-    cols_comm = [["city", "ciga_id", "ciga_gauge", "ciga_data_marker"],
-                 [ "county", "sale_center_id", "ciga_id", "ciga_gauge", "ciga_data_marker"]]
-    cols = [["gauge_city_orders", "gauge_city_order_amount"], ["gauge_county_orders", "gauge_county_order_amount"]]
+    joins=[city,county]
+    # 除需要计算的值，其他的数据
+    cols_comm=[["city","gauge_id","gauge_name","ciga_data_marker"],
+             ["county","sale_center_id","gauge_id","gauge_name","ciga_data_marker"]]
+    #需要计算的值的列名
+    cols=[["gauge_city_orders","gauge_city_order_amount"],["gauge_county_orders","gauge_county_order_amount"]]
     for i in range(len(groups)):
-        group = groups[i]
-        join = joins[i]
-        c = cols[i]
-        marker = markers[i]
+        group=groups[i]
+        join=joins[i]
+        c=cols[i]
+        marker=markers[i]
         try:
-            # 获取本月截止订单行表数据
-            co_co_line = get_co_co_line(spark, scope=[0, 0], filter="month") \
-                .select("item_id", "qty_ord", "amt", group)
-            # 本月每款烟在每个区的订单量,订单额
-            # com_id item_id qty_ord amt
-            qty_amt = co_co_line.groupBy([group, "item_id"]) \
-                .agg(f.sum(col("qty_ord")).alias(c[0]), f.sum(col("amt")).alias(c[1]))
+            #1.获取本月截止订单行表数据
+            co_co_line=get_co_co_line(spark,scope=[0,0],filter="month")\
+                              .select("item_id","qty_ord","amt",group)
+            #2.本月每款烟在每个区的订单量,订单额
+            #com_id item_id qty_ord amt
+            qty_amt=co_co_line.groupBy([group,"item_id"])\
+                          .agg(f.sum(col("qty_ord")).alias(c[0]),f.sum(col("amt")).alias(c[1]))
 
-            column = cols_comm[i] + c
-            qty_amt.withColumn("row", f.concat_ws("_", col(group), col("item_id"))) \
-                .join(plm_item, "item_id") \
-                .join(join, group) \
-                .withColumnRenamed("item_id", "ciga_id") \
-                .withColumnRenamed("item_name", "ciga_gauge") \
-                .withColumn("ciga_data_marker", f.lit(marker)) \
-                .foreachPartition(lambda x: write_hbase1(x, column, hbase))
+            column=cols_comm[i]+c
+            qty_amt.withColumn("row",f.concat_ws("_",col(group),col("item_id")))\
+                    .join(plm_item,"item_id")\
+                    .join(join,group)\
+                    .withColumnRenamed("item_id","gauge_id")\
+                    .withColumnRenamed("item_name","gauge_name")\
+                    .withColumn("ciga_data_marker",f.lit(marker))\
+                    .foreachPartition(lambda x:write_hbase1(x,column,hbase))
         except Exception:
             tb.print_exc()
-
 
 def get_item_stats_info_monthly():
     # 市/区每款卷烟上一月销量/环比/同比
@@ -406,42 +425,44 @@ def get_item_stats_info_monthly():
         .agg(f.collect_list("county").alias("county")) \
         .select("sale_center_id", "county")
 
+    # 标识列的值
     markers = ["1", "3"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    # 除需要计算的值，其他的数据
     cols_comm = [
-        [ "city", "ciga_id", "ciga_gauge", "ciga_data_marker"],
-        [ "county", "sale_center_id", "ciga_id", "ciga_gauge", "ciga_data_marker"]
-    ]
+                 [ "city", "gauge_id", "gauge_name", "ciga_data_marker"],
+                 [ "county", "sale_center_id", "gauge_id", "gauge_name", "ciga_data_marker"]
+                ]
+    # 需要计算的值的列名
     cols = [
-        ["gauge_city_month_sales", "gauge_city_month_orders", "gauge_city_month_sales_ratio",
-         "gauge_city_month2_sales", "gauge_city_month2_orders", "gauge_city_month2_sales_ratio",
-         "gauge_city_month_sales_last_year", "gauge_city_month_orders_last_year", "gauge_city_month_retio_last_year"
-         ],
-        ["gauge_county_month_sales", "gauge_county_month_orders", "gauge_county_month_sales_ratio",
-         "gauge_county_month2_sales", "gauge_county_month2_orders", "gauge_county_month2_sales_ratio",
-         "gauge_county_month_sales_last_year", "gauge_county_month_orders_last_year",
-         "gauge_county_month_retio_last_year"
-         ]
-    ]
+            ["gauge_city_month_sales","gauge_city_month_orders","gauge_city_month_sales_ratio",
+             "gauge_city_month2_sales","gauge_city_month2_orders","gauge_city_month2_sales_ratio",
+             "gauge_city_month_sales_last_year","gauge_city_month_orders_last_year","gauge_city_month_retio_last_year"
+             ],
+            ["gauge_county_month_sales","gauge_county_month_orders","gauge_county_month_sales_ratio",
+            "gauge_county_month2_sales","gauge_county_month2_orders","gauge_county_month2_sales_ratio",
+            "gauge_county_month_sales_last_year","gauge_county_month_orders_last_year","gauge_county_month_retio_last_year"
+            ]
+          ]
 
     for i in range(len(groups)):
         group = groups[i]
         join = joins[i]
         c = cols[i]
-        marker = markers[i]
+        marker=markers[i]
         try:
             # 获取上一个月订单行表数据
             co_co_line = get_co_co_line(spark, scope=[1, 1], filter="month") \
                 .select("item_id", group, "qty_ord")
 
-            # 1、2.市/区每款烟的订单量，订单数
+            # 1.1、1.2.市/区每款烟的订单量，订单数
             print(f"{str(dt.now())}  上一个月{group}每款烟的订单量，订单数")
-            qty_amt = co_co_line.groupBy(group, "item_id") \
-                .agg(f.sum(col("qty_ord")).alias(c[0]), f.count(col(group)).alias(c[1]))
+            qty_amt = co_co_line.groupBy(group, "item_id")\
+                                 .agg(f.sum(col("qty_ord")).alias(c[0]),f.count(col(group)).alias(c[1]))
 
-            # 3.市/区每款卷烟销量占比
+            # 1.3.市/区每款卷烟销量占比
             print(f"{str(dt.now())}  上一个月{group}每款烟的销量占比")
             qty_ratio = co_co_line.groupBy(group) \
                 .agg(f.sum(col("qty_ord")).alias("qty_ord_total")) \
@@ -454,10 +475,10 @@ def get_item_stats_info_monthly():
             co_co_line = get_co_co_line(spark, scope=[2, 2], filter="month") \
                 .select("item_id", group, "qty_ord")
 
-            # 市/区每款卷烟订单量，订单数 上次同期
-            qty_amt_last = co_co_line.groupBy(group, "item_id") \
-                .agg(f.sum(col("qty_ord")).alias(c[3]), f.count(col(group)).alias(c[4]))
-            # 市/区每款卷烟销量占比 上次同期
+            # 2.1、2.2市/区每款卷烟订单量，订单数 上次同期
+            qty_amt_last = co_co_line.groupBy(group, "item_id")\
+                                     .agg(f.sum(col("qty_ord")).alias(c[3]),f.count(col(group)).alias(c[4]))
+            # 2.3市/区每款卷烟销量占比 上次同期
             qty_ratio_last = co_co_line.groupBy(group) \
                 .agg(f.sum(col("qty_ord")).alias("qty_ord_total_last")) \
                 .join(qty_amt_last, group) \
@@ -480,11 +501,11 @@ def get_item_stats_info_monthly():
             last_year = get_co_co_line(spark, scope=[13, 13], filter="month") \
                 .select("item_id", group, "qty_ord")
 
-            # 市/区每款烟的订单量,订单数 去年同期
+            # 3.1、3.2市/区每款烟的订单量,订单数 去年同期
             qty_amt_ly = last_year.groupBy(group, "item_id") \
-                .agg(f.sum(col("qty_ord")).alias(c[6]), f.count(col(group)).alias(c[7]))
+                                 .agg(f.sum(col("qty_ord")).alias(c[6]), f.count(col(group)).alias(c[7]))
 
-            # 市/区每款烟的占比 去年同期
+            # 3.3市/区每款烟的占比 去年同期
             qty_ratio_ly = last_year.groupBy(group) \
                 .agg(f.sum(col("qty_ord")).alias("qty_ord_total")) \
                 .join(qty_amt_ly, group) \
@@ -500,19 +521,19 @@ def get_item_stats_info_monthly():
             # qty_ratio_ly.join(qty_ratio, [group, "item_id"]) \
             #     .withColumn("qty_ratio_yoy", period_udf(col("qty_ratio"), col("qty_ratio_ly")))
 
-            all_df = qty_amt.join(qty_ratio, [group, "item_id"], "outer") \
-                .join(qty_amt_last, [group, "item_id"], "outer") \
-                .join(qty_ratio_last, [group, "item_id"], "outer") \
-                .join(qty_amt_ly, [group, "item_id"], "outer") \
-                .join(qty_ratio_ly, [group, "item_id"], "outer")
-            column = cols_comm + c
-            all_df.withColumn("row", f.concat_ws("_", col(group), col("item_id"))) \
-                .join(plm_item, "item_id") \
-                .join(join, group) \
-                .withColumnRenamed("item_id", "ciga_id") \
-                .withColumnRenamed("item_name", "ciga_gauge") \
-                .withColumn("ciga_data_marker", f.lit(marker)) \
-                .foreachPartition(lambda x: write_hbase1(x, column, hbase))
+            all_df=qty_amt.join(qty_ratio,[group,"item_id"],"outer")\
+                   .join(qty_amt_last,[group,"item_id"],"outer")\
+                   .join(qty_ratio_last,[group,"item_id"],"outer")\
+                   .join(qty_amt_ly,[group,"item_id"],"outer")\
+                   .join(qty_ratio_ly,[group,"item_id"],"outer")
+            column=cols_comm+c
+            all_df.withColumn("row",f.concat_ws("_",col(group),col("item_id")))\
+                  .join(plm_item,"item_id")\
+                  .join(join,group)\
+                  .withColumnRenamed("item_id","gauge_id")\
+                  .withColumnRenamed("item_name","gauge_name")\
+                  .withColumn("ciga_data_marker",f.lit(marker))\
+                  .foreachPartition(lambda x:write_hbase1(x,column,hbase))
         except Exception:
             tb.print_exc()
 
@@ -530,14 +551,17 @@ def get_item_stats_info_weekly():
         .agg(f.collect_list("county").alias("county")) \
         .select("sale_center_id", "county")
 
+    # 标识列的值
     markers = ["1", "3"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    # 除需要计算的值，其他的数据
     cols_comm = [
-        [ "city", "ciga_id", "ciga_gauge", "ciga_data_marker"],
-        [ "county", "sale_center_id", "ciga_id", "ciga_gauge", "ciga_data_marker"]
+        [ "city", "gauge_id", "gauge_name", "ciga_data_marker"],
+        [ "county", "sale_center_id", "gauge_id", "gauge_name", "ciga_data_marker"]
     ]
+    # 需要计算的值的列名
     cols = [
         ["gauge_city_week_sales", "gauge_city_week_sales_last_year", "gauge_city_week2_sales"],
         ["gauge_county_week_sales", "gauge_county_week_sales_last_year", "gauge_county_week2_sales"]
@@ -561,7 +585,7 @@ def get_item_stats_info_weekly():
             co_co_line = get_co_co_line(spark, scope=[2, 2], filter="week") \
                 .select("item_id", group, "qty_ord")
 
-            # 市/区每款卷烟销量 上次同期
+            # 2.市/区每款卷烟销量 上次同期
             qty_amt_last = co_co_line.groupBy(group, "item_id").agg(f.sum(col("qty_ord")).alias(c[1]))
 
             # # 2.市/区每款卷烟销量 环比
@@ -578,7 +602,7 @@ def get_item_stats_info_weekly():
                 .where(col("week_diff") == 1) \
                 .withColumn("qty_ord", col("qty_ord").cast("float")) \
                 .select(group, "item_id", "qty_ord")
-            # 市/区每款烟的订单量 去年
+            # 3.市/区每款烟的订单量 去年
             qty_ord_ly = last_year.groupBy(group, "item_id") \
                 .agg(f.sum(col("qty_ord")).alias(c[2]))
 
@@ -594,16 +618,83 @@ def get_item_stats_info_weekly():
             all_df.withColumn("row", f.concat_ws("_", col(group), col("item_id"))) \
                 .join(plm_item, "item_id") \
                 .join(join, group) \
-                .withColumnRenamed("item_id", "ciga_id") \
-                .withColumnRenamed("item_name", "ciga_gauge") \
+                .withColumnRenamed("item_id", "gauge_id") \
+                .withColumnRenamed("item_name", "gauge_name") \
                 .withColumn("ciga_data_marker", f.lit(marker)) \
                 .foreachPartition(lambda x: write_hbase1(x, column, hbase))
         except Exception:
             tb.print_exc()
 
 
+def get_item_historical_sales():
+    #市/区每款卷烟上四周各周的销量
+    try:
+
+        # 烟id，烟名称
+        plm_item = get_plm_item(spark).select("item_id", "item_name")
+
+        area = get_area(spark)
+        # com_id与city的映射关系
+        city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
+        # sale_center_id与区(list)的映射关系
+        county = area.groupBy("sale_center_id") \
+            .agg(f.collect_list("county").alias("county")) \
+            .select("sale_center_id", "county")
+
+        # 标识列的值
+        markers = ["1", "3"]
+        # 按照 市或区统计
+        groups = ["com_id", "sale_center_id"]
+        joins = [city, county]
+        # 除需要计算的值，其他的数据
+        cols_comm = [
+            ["city", "gauge_id", "gauge_name", "ciga_data_marker"],
+            ["county", "sale_center_id", "gauge_id", "gauge_name", "ciga_data_marker"]
+        ]
+        # 需要计算的值的列名
+        cols = ["gauge_city_sales_history","gauge_county_sales_history"]
+        for i in range(len(groups)):
+            group = groups[i]
+            join = joins[i]
+            c = cols[i]
+            marker = markers[i]
+            print(f"{str(dt.now())} {group} 每款卷烟上四周各周的销量")
+            try:
+                # 获取上四周订单行表数据
+                #date为订单所在周的星期五的日期 给前端展示
+                co_co_line = get_co_co_line(spark, scope=[1, 4], filter="week") \
+                    .select("item_id", group, "qty_ord","born_date")\
+                    .withColumn("date",f.date_add(f.date_trunc("week",col("born_date")),4))
+
+                json_udf=f.udf(lambda x,y:json.dumps({"date":x,"value":y}))
+                #计算每个市/区 每款烟前四周各周的销量
+                #将结果拼成 [{"date":"2019-06-21","value":12354},{"date":"2019-06-14","value":14331}....]
+                result=co_co_line.groupBy(group,"item_id","date")\
+                          .agg(f.sum(col("qty_ord")).alias("qty_ord"))\
+                          .withColumn("json",json_udf(col("date"),col("qty_ord")))\
+                          .groupBy(group,"item_id")\
+                          .agg(f.collect_list(col("json")).alias(c))
+
+
+
+                column = cols_comm + c
+                result.withColumn("row", f.concat_ws("_", col(group), col("item_id"))) \
+                    .join(plm_item, "item_id") \
+                    .join(join, group) \
+                    .withColumnRenamed("item_id", "gauge_id") \
+                    .withColumnRenamed("item_name", "gauge_name") \
+                    .withColumn("ciga_data_marker", f.lit(marker)) \
+                    .foreachPartition(lambda x: write_hbase1(x, column, hbase))
+            except Exception:
+                tb.print_exc()
+    except Exception:
+        tb.print_exc()
+
+
+
+
 def get_cover_rate():
-    # 店铺覆盖率
+    #店铺覆盖率
 
     # 烟id，烟名称
     plm_item = get_plm_item(spark).select("item_id", "item_name")
@@ -616,14 +707,17 @@ def get_cover_rate():
         .agg(f.collect_list("county").alias("county")) \
         .select("sale_center_id", "county")
 
+    # 标识列的值
     markers = ["1", "3"]
     # 按照 市或区统计
     groups = ["com_id", "sale_center_id"]
     joins = [city, county]
+    # 除需要计算的值，其他的数据
     cols_comm = [
-        [ "city", "ciga_id", "ciga_gauge", "ciga_data_marker"],
-        [ "county", "sale_center_id", "ciga_id", "ciga_gauge", "ciga_data_marker"]
+        [ "city",  "gauge_id", "gauge_name", "ciga_data_marker"],
+        ["county", "sale_center_id","gauge_id", "gauge_name", "ciga_data_marker"]
     ]
+    # 需要计算的值的列名
     cols = [
         "city_gauge_retail_ratio",
         "county_gauge_retail_ratio"
@@ -635,20 +729,21 @@ def get_cover_rate():
         c = cols[i]
         marker = markers[i]
         try:
-            co_cust = get_co_cust(spark).select("cust_id", group)
+            co_cust = get_co_cust(spark).select("cust_id",group)
             co_co_line = get_co_co_line(spark, scope=[1, 1], filter="month") \
                 .select("item_id", "cust_id", group)
 
             print(f"{str(dt.now())}  卷烟店铺覆盖率  {area}级别")
 
-            # 每个区域零售户数量
+            # 1.每个区域零售户数量
             cust_num = co_cust.groupBy(group).agg(f.count("cust_id").alias("cust_num"))
-            # 每个区域每款卷烟覆盖店面数量
+            # 2.每个区域每款卷烟覆盖店面数量
             item_cover_num = co_co_line.dropDuplicates(["cust_id", "item_id"]) \
                 .groupBy(group, "item_id") \
                 .agg(f.count("cust_id").alias("item_cover_num"))
 
-            cover_ratio = item_cover_num.join(cust_num, group) \
+            #3.店铺覆盖率
+            cover_ratio=item_cover_num.join(cust_num, group) \
                 .withColumn(c, col("item_cover_num") / col("cust_num"))
 
             column = cols_comm[i] + c
@@ -656,8 +751,136 @@ def get_cover_rate():
                 .join(plm_item, "item_id") \
                 .join(join, group) \
                 .withColumn("ciga_data_marker", f.lit(marker)) \
-                .withColumnRenamed("item_id", "ciga_id") \
-                .withColumnRenamed("item_name", "ciga_gauge") \
+                .withColumnRenamed("item_id", "gauge_id") \
+                .withColumnRenamed("item_name", "gauge_name") \
                 .foreachPartition(lambda x: write_hbase1(x, column, hbase))
         except Exception:
             tb.print_exc()
+
+
+
+def get_als_rating():
+    # 品牌/规格卷烟区域偏好分布
+    hbase = {"table": als_table, "families": ["0"], "row": "row"}
+    try:
+        #卷烟id 卷烟名称
+        plm_item = get_plm_item(spark).select("item_id", "item_name") \
+                 .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
+                 .withColumnRenamed("item_id","gauge_id")\
+                 .withColumnRenamed("item_name","gauge_name")
+        #卷烟品规id 卷烟品规名称
+        brand=get_phoenix_table(spark, brand_table).select("brand_id","brand_name")
+
+
+        area = get_area(spark)
+        # com_id与city的映射关系
+        city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
+        # sale_center_id与区(list)的映射关系
+        county = area.groupBy("sale_center_id") \
+                .agg(f.collect_list("county").alias("county")) \
+                .select("sale_center_id", "county")
+
+        #com_id,sale_center_id,city,county,cust_id,cust_name,longitude,latitude
+        co_cust = get_co_cust(spark).select("cust_id", "cust_name", "com_id", "sale_center_id") \
+                                    .join(get_cust_lng_lat(spark), "cust_id") \
+                                    .withColumnRenamed("lng", "longitude") \
+                                    .withColumnRenamed("lat", "latitude")\
+                                    .join(county,"sale_center_id")\
+                                     .join(city,"com_id")
+
+        #开始计算评分
+        #1.获取近30天数据 并删除缺失值
+        co_co_line = get_co_co_line(spark, scope=[0, 30])\
+                                  .join(plm_item,col("item_id")==col("gauge_id"))\
+                                  .join(brand,"brand_name")\
+                                  .select("cust_id","brand_id", "gauge_id", "qty_ord", "qty_rsn") \
+                                  .na.drop()
+
+        # 除需要计算的值，其他的数据
+        cols_comm = [
+                     ["city","sale_center_id","county","cust_id","cust_name"
+                       "longitude","latitude","brand_id", "brand_name", "ciga_data_marker"],
+                     ["city","sale_center_id", "county", "cust_id", "cust_name"
+                       "longitude", "latitude", "gauge_id", "gauge_name","ciga_data_marker"],
+                     ]
+        #标识列的值
+        markers = ["0", "1"]
+        # 需要计算的值的列名
+        cols = ["brand_grade", "item_grade"]
+        joins = [brand, plm_item]
+        #按照品牌/品规 聚合
+        groups = ["brand_id", "gauge_id"]
+        for i in range(len(groups)):
+            try:
+                group=groups[i]
+                join=joins[i]
+                c=cols[i]
+                marker=markers[i]
+                #2.获取每个零售户对每款卷烟的订足率 并删除null值
+                item_rating=co_co_line.groupBy("cust_id", group) \
+                        .agg(f.sum("qty_ord").alias("qty_ord"), f.sum("qty_rsn").alias("qty_rsn")) \
+                        .withColumn(c, col("qty_ord") / col("qty_rsn")) \
+                        .na.drop().select("cust_id", group, c)
+                #3.每个零售户对每款烟的一个评分
+                result=recommendForAllUsers(spark,item_rating,"cust_id",group,c)
+
+
+                print(f"{str(dt.now())} 每个零售户对每款烟的评分")
+                columns=cols_comm[i]+c
+                result.join(co_cust,"cust_id")\
+                      .join(join,group)\
+                      .withColumn("row",f.concat_ws("_",col("cust_id"),col(group)))\
+                      .withColumn("ciga_data_marker",f.lit(marker))\
+                      .foreachPartition(lambda x:write_hbase1(x,columns,hbase))
+            except Exception:
+                tb.print_exc()
+    except Exception:
+        tb.print_exc()
+
+
+
+
+def get_static_similar_ciagr():
+    #静态属性相似卷烟
+    try:
+        print(f"{str(dt.now())} 静态属性相似卷烟")
+        similar_cigar=spark.createDataFrame(get_similar_cigar())
+        plm_item=get_plm_item(spark).select("item_id","item_name")
+
+        columns=["gauge_id","gauge_name","gauge_prop_like_ciga","ciga_data_marker"]
+        json_udf=f.udf(lambda x,y:json.dumps({x:y}))
+        similar_cigar.join(plm_item,"item_id")\
+                     .withColumnRenamed("item_id","gauge_id")\
+                     .withColumnRenamed("item_name","gauge_name")\
+                     .join(plm_item,col("s_item_id")==col("item_id"))\
+                     .withColumn("gauge_prop_like_ciga",json_udf(col("item_id"),col("item_name")))\
+                     .withColumn("row",col("gauge_id"))\
+                     .withColumn("ciga_data_marker",f.lit("4"))\
+                     .foreachPartition(lambda x:write_hbase1(x,columns,hbase))
+    except Exception:
+        tb.print_exc()
+
+
+def get_order_similar_cigar():
+    #客户订购相似卷烟
+    try:
+        print(f"{str(dt.now())} 客户订购相似卷烟")
+        # origin为要查找的烟，nearest为最相似的卷烟
+        similar_cigar=get_client_similar_cigar(spark)
+
+        plm_item = get_plm_item(spark).select("item_id", "item_name")
+
+        columns = ["gauge_id", "gauge_name", "gauge_client_like_ciga", "ciga_data_marker"]
+        json_udf = f.udf(lambda x, y: json.dumps({x: y}))
+        similar_cigar.join(plm_item, col("origin")==col("item_id")) \
+            .withColumnRenamed("item_id", "gauge_id") \
+            .withColumnRenamed("item_name", "gauge_name") \
+            .join(plm_item, col("nearest") == col("item_id")) \
+            .withColumn("gauge_client_like_ciga", json_udf(col("item_id"), col("item_name"))) \
+            .withColumn("row", col("gauge_id")) \
+            .withColumn("ciga_data_marker", f.lit("4")) \
+            .foreachPartition(lambda x: write_hbase1(x, columns, hbase))
+
+    except Exception:
+        tb.print_exc()
+
