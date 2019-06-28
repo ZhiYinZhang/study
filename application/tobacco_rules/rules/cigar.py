@@ -10,7 +10,6 @@ import json
 from application.tobacco_rules.rules.utils import *
 from application.tobacco_rules.rules.config import cities,ciga_table,brand_table,als_table
 from application.tobacco_rules.rules.write_hbase import write_hbase1
-from application.tobacco_rules.ml.cigar_rating import recommendForAllUsers
 from application.tobacco_rules.ml.similar_cigar import get_similar_cigar
 from application.tobacco_rules.ml.client_similar_cigar import get_client_similar_cigar
 
@@ -758,88 +757,6 @@ def get_cover_rate():
             tb.print_exc()
 
 
-
-def get_als_rating():
-    # 品牌/规格卷烟区域偏好分布
-    hbase = {"table": als_table, "families": ["0"], "row": "row"}
-    try:
-        #卷烟id 卷烟名称
-        plm_item = get_plm_item(spark).select("item_id", "item_name") \
-                 .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
-                 .withColumnRenamed("item_id","gauge_id")\
-                 .withColumnRenamed("item_name","gauge_name")
-        #卷烟品规id 卷烟品规名称
-        brand=get_phoenix_table(spark, brand_table).select("brand_id","brand_name")
-
-
-        area = get_area(spark)
-        # com_id与city的映射关系
-        city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
-        # sale_center_id与区(list)的映射关系
-        county = area.groupBy("sale_center_id") \
-                .agg(f.collect_list("county").alias("county")) \
-                .select("sale_center_id", "county")
-
-        #com_id,sale_center_id,city,county,cust_id,cust_name,longitude,latitude
-        co_cust = get_co_cust(spark).select("cust_id", "cust_name", "com_id", "sale_center_id") \
-                                    .join(get_cust_lng_lat(spark), "cust_id") \
-                                    .withColumnRenamed("lng", "longitude") \
-                                    .withColumnRenamed("lat", "latitude")\
-                                    .join(county,"sale_center_id")\
-                                     .join(city,"com_id")
-
-        #开始计算评分
-        #1.获取近30天数据 并删除缺失值
-        co_co_line = get_co_co_line(spark, scope=[0, 30])\
-                                  .join(plm_item,col("item_id")==col("gauge_id"))\
-                                  .join(brand,"brand_name")\
-                                  .select("cust_id","brand_id", "gauge_id", "qty_ord", "qty_rsn") \
-                                  .na.drop()
-
-        # 除需要计算的值，其他的数据
-        cols_comm = [
-                     ["city","sale_center_id","county","cust_id","cust_name"
-                       "longitude","latitude","brand_id", "brand_name", "ciga_data_marker"],
-                     ["city","sale_center_id", "county", "cust_id", "cust_name"
-                       "longitude", "latitude", "gauge_id", "gauge_name","ciga_data_marker"],
-                     ]
-        #标识列的值
-        markers = ["0", "1"]
-        # 需要计算的值的列名
-        cols = ["brand_grade", "item_grade"]
-        joins = [brand, plm_item]
-        #按照品牌/品规 聚合
-        groups = ["brand_id", "gauge_id"]
-        for i in range(len(groups)):
-            try:
-                group=groups[i]
-                join=joins[i]
-                c=cols[i]
-                marker=markers[i]
-                #2.获取每个零售户对每款卷烟的订足率 并删除null值
-                item_rating=co_co_line.groupBy("cust_id", group) \
-                        .agg(f.sum("qty_ord").alias("qty_ord"), f.sum("qty_rsn").alias("qty_rsn")) \
-                        .withColumn(c, col("qty_ord") / col("qty_rsn")) \
-                        .na.drop().select("cust_id", group, c)
-                #3.每个零售户对每款烟的一个评分
-                result=recommendForAllUsers(spark,item_rating,"cust_id",group,c)
-
-
-                print(f"{str(dt.now())} 每个零售户对每款烟的评分")
-                columns=cols_comm[i]+c
-                result.join(co_cust,"cust_id")\
-                      .join(join,group)\
-                      .withColumn("row",f.concat_ws("_",col("cust_id"),col(group)))\
-                      .withColumn("ciga_data_marker",f.lit(marker))\
-                      .foreachPartition(lambda x:write_hbase1(x,columns,hbase))
-            except Exception:
-                tb.print_exc()
-    except Exception:
-        tb.print_exc()
-
-
-
-
 def get_static_similar_ciagr():
     #静态属性相似卷烟
     try:
@@ -880,6 +797,90 @@ def get_order_similar_cigar():
             .withColumn("row", col("gauge_id")) \
             .withColumn("ciga_data_marker", f.lit("4")) \
             .foreachPartition(lambda x: write_hbase1(x, columns, hbase))
+
+    except Exception:
+        tb.print_exc()
+
+
+
+
+
+
+def get_brand_rating():
+    # 品牌卷烟区域偏好分布
+    hbase = {"table": als_table, "families": ["0"], "row": "row"}
+    try:
+        #卷烟品规id 卷烟品规名称
+        brand=get_phoenix_table(spark, brand_table).select("brand_id","brand_name")
+
+        area = get_area(spark)
+        # com_id与city的映射关系
+        city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
+        # sale_center_id与区(list)的映射关系
+        county = area.groupBy("sale_center_id") \
+                .agg(f.collect_list("county").alias("county")) \
+                .select("sale_center_id", "county")
+
+        #com_id,sale_center_id,city,county,cust_id,cust_name,longitude,latitude
+        co_cust = get_co_cust(spark).select("cust_id", "cust_name", "com_id", "sale_center_id") \
+                                    .join(get_cust_lng_lat(spark), "cust_id") \
+                                    .withColumnRenamed("lng", "longitude") \
+                                    .withColumnRenamed("lat", "latitude")\
+                                    .join(county,"sale_center_id")\
+                                     .join(city,"com_id")
+
+        columns = ["city","sale_center_id","county","cust_id","cust_name"
+                       "longitude","latitude","brand_id", "brand_name", "ciga_data_marker","brand_grade"]
+
+
+        print(f"{str(dt.now())} 每个零售户对每款烟的评分")
+
+        get_rating(spark, "brand_name")\
+               .join(co_cust,"cust_id")\
+               .join(brand,"brand_name")\
+               .withColumn("row",f.concat_ws("_",col("cust_id"),col("brand_id")))\
+               .withColumn("ciga_data_marker",f.lit("0"))\
+               .withColumnRenamed("rating","brand_grade")\
+               .foreachPartition(lambda x:write_hbase1(x,columns,hbase))
+    except Exception:
+        tb.print_exc()
+
+
+def get_item_rating():
+    #规格卷烟区域偏好分布
+    hbase = {"table": als_table, "families": ["0"], "row": "row"}
+    try:
+        #卷烟id 卷烟名称
+        plm_item = get_plm_item(spark).select("item_id", "item_name")
+
+        area = get_area(spark)
+        # com_id与city的映射关系
+        city = area.dropDuplicate(["com_id", "sale_center_id"]).select("com_id", "city")
+        # sale_center_id与区(list)的映射关系
+        county = area.groupBy("sale_center_id") \
+                .agg(f.collect_list("county").alias("county")) \
+                .select("sale_center_id", "county")
+
+        #com_id,sale_center_id,city,county,cust_id,cust_name,longitude,latitude
+        co_cust = get_co_cust(spark).select("cust_id", "cust_name", "com_id", "sale_center_id") \
+                                    .join(get_cust_lng_lat(spark), "cust_id") \
+                                    .withColumnRenamed("lng", "longitude") \
+                                    .withColumnRenamed("lat", "latitude")\
+                                    .join(county,"sale_center_id")\
+                                    .join(city,"com_id")
+
+        print(f"{str(dt.now())} 每个零售户对每款烟的评分")
+        columns=["city","sale_center_id", "county", "cust_id", "cust_name"
+                       "longitude", "latitude", "gauge_id", "gauge_name","ciga_data_marker","gauge_grade"]
+
+        get_rating(spark, "item_id").join(co_cust,"cust_id")\
+                                  .join(plm_item,"item_id")\
+                                  .withColumn("row",f.concat_ws("_",col("cust_id"),col("item_id")))\
+                                  .withColumn("ciga_data_marker",f.lit("1"))\
+                                  .withColumnRenamed("item_id","gauge_id")\
+                                  .withColumnRenamed("item_name","gauge_name")\
+                                  .withColumnRenamed("rating","gauge_grade")\
+                                  .foreachPartition(lambda x:write_hbase1(x,columns,hbase))
 
     except Exception:
         tb.print_exc()

@@ -8,6 +8,7 @@ from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 from pyspark.sql import functions as f
 from pyspark.sql import Column
+from application.tobacco_rules.ml.cigar_rating import recommendForAllUsers
 from application.tobacco_rules.rules.config import cities,zkUrl
 #---------------------------------------udf---------------------------------------
 def period(x,y):
@@ -420,6 +421,34 @@ def get_around_cust(spark,around:int):
     around_cust=cust_lng_lat.join(cust_lng_lat1,(col("lng0")>=col("lng_l")) & (col("lng0")<=col("lng_r")) & (col("lat0")>=col("lat_d")) & (col("lat0")<=col("lat_u")))\
                             .select("city1","cust_id1","lng1","lat1","city0","cust_id0","lng0","lat0")
     return around_cust
+
+
+def get_rating(spark,group):
+    """
+
+    :param spark:
+    :param group:取brand_name或item_id，item_id:计算零售户对品规的评分
+                brand_name:计算零售户对品牌的评分
+    :return: cust_id,brand_name/item_id,rating
+    """
+    # 开始计算评分
+    # 1.获取近30天数据 并删除缺失值
+    co_co_line = get_co_co_line(spark, scope=[0, 30]) \
+        .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
+        .select("cust_id", group, "qty_ord", "qty_rsn") \
+        .na.drop()
+
+
+    # 2.获取每个零售户对每款卷烟的订足率 并删除null值
+    item_rating = co_co_line.groupBy("cust_id", group) \
+        .agg(f.sum("qty_ord").alias("qty_ord"), f.sum("qty_rsn").alias("qty_rsn")) \
+        .withColumn("rating", col("qty_ord") / col("qty_rsn")) \
+        .na.drop().select("cust_id", group, "rating")
+    # 3.每个零售户对每款烟的一个评分
+    result = recommendForAllUsers(spark, item_rating, "cust_id", group, "rating")
+
+    return result
+
 
 
 

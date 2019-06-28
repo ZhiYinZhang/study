@@ -1,11 +1,13 @@
-cols={
-                  "value":"order_sum",
-                  "abnormal":"sum_abno_month",
-                  "mean_plus_3std":"grade_sum_plus3",
-                  "mean_minus_3std":"grade_sum_minu3",
-                  "mean":"grade_sum"
-                  }
-values=list(cols.values())
-values.remove(cols["value"])
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+import happybase
+from happybase import Table
 
-print(values)
+hbase={"host":"10.18.0.34","size":10,"table":"test2",
+       "row":"cust_id",
+       "families":["0"]}
+
+conn=happybase.Connection(hbase["host"])
+table=conn.table(hbase["table"])
+
+conn.create_table(name="temp",families={"0":{}})

@@ -129,20 +129,29 @@ def delete_all(table_name,column):
                 # print(row[0],row[1])
                 batch.delete(row[0])
         print("size:",size)
+
+def upper_case(cols):
+    result=[]
+    for i in cols:
+        result.append(i.upper())
+    return result
+
 from  random import randint
 hbase={"host":"10.18.0.34","size":10,"table":"member3",
        "row":"cust_id",
-       "familys":["column_A","column_B"],  #本次要写的列族
+       "families":["column_A","column_B"],  #本次要写的列族
        "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
         "1":"sum(qty_sum)","2":"sum(qty_sum)","4":"sum(qty_sum)","5":"sum(qty_sum)" # hbase的列 对应 DataFrame的列
        }
 
 if __name__=="__main__":
+    prefix="V630_TOBACCO."
     tables=["TEST","test2",
-            "TOBACCO.AREA","TOBACCO.RETAIL",
-            "TOBACCO.RETAIL_WARNING","TOBACCO.WARNING_CODE",
-            "TOBACCO.DATA_INDEX","TOBACCO.BLOCK_DATA"]
-    hbase["table"]=tables[0]
+            prefix+"AREA",prefix+"RETAIL",
+            prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
+            prefix+"DATA_INDEX",prefix+"BLOCK_DATA",
+            prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS"]
+    hbase["table"]=tables[9]
 
     hbase["families"] = "0"
 
@@ -164,16 +173,16 @@ if __name__=="__main__":
 
 
     #读数据
-    # cols = {
-    #     "value": "qty_sum",
-    #     "abnormal": "sum_abno_time",
-    #     "mean_plus_3std": "last_sum_plus3",
-    #     "mean_minus_3std": "last_sum_minu3",
-    #     "mean": "last_sum_mean"
-    # }
-    # values = list(cols.values())
-    cols = ["BRAND_NAME"]
-    rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=False,limit=100)
+    cols = {
+        "value": "qty_sum",
+        "abnormal": "sum_abno_time",
+        "mean_plus_3std": "last_sum_plus3",
+        "mean_minus_3std": "last_sum_minu3",
+        "mean": "last_sum_mean"
+    }
+    values = list(cols.values())
+    cols = ["gauge_week_planned_volume", "gauge_week_reality_volume", "gauge_week_residue_volume"]
+    rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=100)
     for row in rows:
             print(row)
             # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))

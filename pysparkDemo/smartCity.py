@@ -10,8 +10,8 @@ from hbaseDemo.hbaseOpt import write_hbase1
 
 spark = SparkSession.builder \
             .appName("smartCity")\
-            .config("spark.sql.execution.arrow.enabled","true") \
             .master("local[3]")\
+            .enableHiveSupport()\
             .getOrCreate()
 
 df=spark.read.csv("E:\pythonProject\jupyter/cigar_sales_need0.csv",header=True)
@@ -27,3 +27,6 @@ df.withColumn("brand_name", f.element_at(f.split("item_name", "\("),1))\
     .withColumn("brand_id",f.row_number().over(Window.orderBy("brand_name")))\
     .withColumn("brand_id",col("brand_id").cast("string"))\
      .foreachPartition(lambda x:write_hbase1(x,hbase,["brand_name"]))
+
+
+f.trunc
