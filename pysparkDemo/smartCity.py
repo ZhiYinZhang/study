@@ -7,26 +7,33 @@ from pyspark.sql import functions as f
 from datetime import datetime as dt
 from hbaseDemo.hbaseOpt import write_hbase1
 
+import pandas as pd
+def _to_pandas(rows):
+    pd_df=pd.DataFrame(list(rows))
+    return [pd_df]
+def to_pandas(df,num_partitions=None):
+    """
+
+    :param df: spark DataFrame
+    :param num_partitions: 设置spark DataFrame的partition数量 默认：None
+    :return:
+    """
+    if num_partitions is not None:
+        df=df.repartition(num_partitions)
+    pd_dfs=df.rdd.mapPartitions(_to_pandas).collect()
+    pd_df=pd.concat(pd_dfs)
+    pd_df.columns=df.columns
+
+    return pd_df
 
 spark = SparkSession.builder \
             .appName("smartCity")\
-            .master("local[3]")\
-            .enableHiveSupport()\
+            .master("local[5]")\
             .getOrCreate()
 
-df=spark.read.csv("E:\pythonProject\jupyter/cigar_sales_need0.csv",header=True)
 
-hbase={"host":"10.18.0.34","size":10,"table":"V630_TOBACCO.BRAND_DATA",
-       "row":"brand_id",
-       "families":["0"]}
+df=spark.range(50).withColumn("value",f.md5(f.lit("abcd")))
 
 
-df.withColumn("brand_name", f.element_at(f.split("item_name", "\("),1))\
-    .select("brand_name")\
-    .distinct()\
-    .withColumn("brand_id",f.row_number().over(Window.orderBy("brand_name")))\
-    .withColumn("brand_id",col("brand_id").cast("string"))\
-     .foreachPartition(lambda x:write_hbase1(x,hbase,["brand_name"]))
 
 
-f.trunc
