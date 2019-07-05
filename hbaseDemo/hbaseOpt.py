@@ -137,7 +137,7 @@ def upper_case(cols):
     return result
 
 from  random import randint
-hbase={"host":"10.18.0.34","size":10,"table":"member3",
+hbase={"host":"10.72.59.89","size":10,"table":"member3",
        "row":"cust_id",
        "families":["column_A","column_B"],  #本次要写的列族
        "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
@@ -145,13 +145,13 @@ hbase={"host":"10.18.0.34","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    prefix="V630_TOBACCO."
+    prefix="V530_TOBACCO."
     tables=["TEST","test2",
             prefix+"AREA",prefix+"RETAIL",
             prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
             prefix+"DATA_INDEX",prefix+"BLOCK_DATA",
             prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS"]
-    hbase["table"]=tables[9]
+    hbase["table"]=tables[3]
 
     hbase["families"] = "0"
 
@@ -181,7 +181,7 @@ if __name__=="__main__":
         "mean": "last_sum_mean"
     }
     values = list(cols.values())
-    cols = ["gauge_week_planned_volume", "gauge_week_reality_volume", "gauge_week_residue_volume"]
+    cols = ["sum_last_week", "sum_last_two_week", "sum_last_four_week"]
     rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=100)
     for row in rows:
             print(row)

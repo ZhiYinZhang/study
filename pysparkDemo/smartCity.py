@@ -35,5 +35,10 @@ spark = SparkSession.builder \
 df=spark.range(50).withColumn("value",f.md5(f.lit("abcd")))
 
 
+df2=df.cache()
+
+df2.explain()
+
+
 
 
