@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # datetime:2019/4/8 16:39
+import os
 import math
 import traceback as tb
 from datetime import datetime as dt
@@ -8,8 +9,12 @@ from pyspark.sql.types import FloatType,IntegerType
 from pyspark.sql.functions import udf,date_trunc,datediff,col
 from pyspark.sql import functions as f
 from pyspark.sql import Column
-from application.tobacco_rules.ml.cigar_rating import recommendForAllUsers
-from application.tobacco_rules.rules.config import cities,zkUrl
+from pyspark.sql import Window
+from ml.cigar_rating import recommendForAllUsers
+from rules.config import cities,zkUrl,rent_path,food_path,hotel_path,poi_path,center_path,\
+              lng_lat_path,shaoyang_stat_path,yueyang_stat_path,zhuzhou_stat_path, \
+              population_path,avg_vfr_path,cons_level_path,cluster_path,brand_table,cigar_rating_path, \
+              shaoyang_vfr_path,zhuzhou_vfr_path,yueyang_vfr_path
 #---------------------------------------udf---------------------------------------
 def period(x,y):
     try:
@@ -147,10 +152,63 @@ def consume_level(rent,food,hotel,rent_25,food_25,hotel_25):
 consume_level_udf=udf(consume_level,FloatType())
 
 
-#按照索引 获取数组中的值 从1开始
+#按照索引 获取数组中的值 索引从1开始
 element_at=udf(lambda x,y:x[y-1])
 
 
+
+
+def item_name_etl(df):
+    #去掉空格  去掉f或F开头的f或F  去掉*   中文括号用英文括号替换
+    # 处理item_name
+    df_etl = df\
+            .withColumn("item_name", f.trim(col("item_name"))) \
+            .withColumn("item_name", f.regexp_replace(col("item_name"), "\*|^f|^F", "")) \
+            .withColumn("item_name", f.regexp_replace(col("item_name"), "\（", "\(")) \
+            .withColumn("item_name", f.regexp_replace(col("item_name"), "\）", "\)"))
+    # 获取brand_name 并处理
+    result=df_etl.withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
+                    .withColumn("brand_name", f.trim(col("brand_name")))
+    return result
+
+def item_name_udf(item_name:Column):
+    """
+
+    :param item_name: Column
+    :return:
+    """
+    # 去掉空格  去掉f或F开头的f或F  去掉*   中文括号用英文括号替换
+    item_name = f.trim(item_name)
+    item_name = f.regexp_replace(item_name, "\*|^f|^F", "")
+    item_name = f.regexp_replace(item_name, "\（", "\(")
+    item_name = f.regexp_replace(item_name, "\）", "\)")
+    brand_name = element_at(f.split(item_name, "\("), f.lit(1))
+    brand_name = f.trim(brand_name)
+    return brand_name
+
+
+from sklearn.neighbors import KNeighborsRegressor
+
+def fillWithKNN(df, df_toFill, column):
+    """
+
+    :param df: 有值的pandas DataFrame
+    :param df_toFill: 需要填充的pandas DataFrame
+    :param column: 填充的列名
+    :return:
+    """
+
+    df[column] = df[column].astype("float")
+    X_train = df[['lat', 'lng']]
+    y_train = df[[column]]
+
+    X_test = df_toFill[['lat', 'lng']]
+
+    estimator = KNeighborsRegressor()
+    estimator.fit(X_train, y_train)
+    df_toFill[column] = estimator.predict(X_test)
+
+    return df_toFill
 
 
 
@@ -184,6 +242,153 @@ def is_except(df,cols:dict,groupBy:list):
     return result
 
 
+def poi_index(spark,cust_lng_lat,coordinate, regex,is_fill=False):
+    """
+    :param cust_lng_lat:DataFrame,列:city cust_id lng lat lng_l lng_r lat_d lat_u
+    :param coordinate:poi 列:cityname lng lat types
+    :param regex:  过滤poi的正则
+    :param is_fill: 是否填充
+    :return DataFrame city cust_id poi_index
+    """
+
+    print(f"{str(dt.now())} poi指数  {regex}")
+    # coordinate先过滤符合条件的服务 再去join零售户, 在按照city cust_id分组
+    count_df = coordinate.where(col("types").rlike(regex)) \
+                        .join(cust_lng_lat.drop("lng","lat"),
+                              (col("cityname")==col("city")) &
+                              (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r"))
+                              & (col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u"))) \
+                        .groupBy("city", "cust_id").count()
+
+
+    if is_fill ==True:
+        # 周围有对应店铺数量的零售户
+        exist_df = count_df.join(cust_lng_lat, ["city", "cust_id"]) \
+            .select("city", "cust_id", "lng", "lat", "count")
+
+        # 周围没有对应店铺的零售户
+        not_df = cust_lng_lat.select("city", "cust_id") \
+            .exceptAll(count_df.select("city", "cust_id")) \
+            .join(cust_lng_lat, ["city", "cust_id"]) \
+            .select("city", "cust_id", "lng", "lat")
+
+        if not_df.count()>0:
+            # 用knn填充没有店铺数量的零售户
+            fill_pd_df = fillWithKNN(exist_df.toPandas(), not_df.toPandas(), "count")
+            fill_df = spark.createDataFrame(fill_pd_df)
+
+            all_df = exist_df.unionByName(fill_df)
+        else:
+            all_df=exist_df
+
+
+
+        # 计算阈值threshold =mean(对应数量)+3*std(对应数量)
+        threshold = all_df.groupBy("city").agg((f.mean("count") + 3 * f.stddev_pop("count")).alias("threshold"),
+                                               f.max("count"))
+        # 如果数量大于threshold，就用threshold替换
+        replace_df = all_df.join(threshold, "city") \
+            .withColumn("count", f.when(col("count") > col("threshold"), col("threshold"))
+                        .otherwise(col("count"))
+                        )
+
+        result=replace_df
+    else:
+        result=count_df
+
+
+    # 全市所有店铺同等计算方式的最大值
+    count_max = result.groupBy("city").agg(f.max("count").alias("max"))
+
+    # result
+    return result.join(count_max, "city").withColumn("poi_index", col("count") / col("max") * 5)
+
+
+def fill_dp(spark,cust_lng_lat, dp, colName,coordinate, regex):
+    """
+        填充价格
+    :param cust_lng_lat:零售户经纬度DataFrame,列: city cust_id lng lat lng_l lng_r lat_d lat_u
+    :param dp:零售户房租/餐饮/酒店的平均价格DataFrame, 列: city cust_id {colName}
+    :param colName:价格字段
+    :param coordinate:poi数据DataFrame, 列: lng lat types
+    :param regex: 过滤poi的正则
+    """
+    # 列:city,cust_id,poi_index
+    poi_index_df = poi_index(spark, cust_lng_lat,coordinate, regex)
+    # 得到包含所有零售户的DataFrame
+    df0 = cust_lng_lat.join(poi_index_df, ["city", "cust_id"], "left") \
+                        .join(dp, ["city", "cust_id"], "left") \
+                        .select("city", "cust_id", colName, "poi_index", "lng", "lat")
+
+    summary = df0.select(colName, "poi_index").summary().cache()
+
+    # 全市平均价格的min,max及各分位数
+    price_min = summary.where(col("summary") == "min").collect()[0][colName]
+    price_25 = summary.where(col("summary") == "25%").collect()[0][colName]
+    price_50 = summary.where(col("summary") == "50%").collect()[0][colName]
+    price_75 = summary.where(col("summary") == "75%").collect()[0][colName]
+    price_max = summary.where(col("summary") == "max").collect()[0][colName]
+
+    # 全市对应poi指数的min,max及各分位数
+    poi_25 = summary.where(col("summary") == "25%").collect()[0]["poi_index"]
+    poi_50 = summary.where(col("summary") == "50%").collect()[0]["poi_index"]
+    poi_75 = summary.where(col("summary") == "75%").collect()[0]["poi_index"]
+    poi_max = summary.where(col("summary") == "max").collect()[0]["poi_index"]
+
+    # 零售户周边既没有poi也没有价格的零售户，先用0填充
+    df1 = df0.withColumn(colName, f.when(col(colName).isNull() & col("poi_index").isNull(), 0)
+                         .otherwise(col(colName))
+                         )
+
+    # 零售户周边有poi没有价格的，使用分箱填充价格
+    df2 = df1.withColumn(colName,
+                         f.when((col(colName).isNull()) & (col("poi_index") < poi_25), price_min)
+                         .when((col(colName).isNull()) & (col("poi_index") >= poi_25) & (col("poi_index") < poi_50),
+                               price_25)
+                         .when((col(colName).isNull()) & (col("poi_index") >= poi_50) & (col("poi_index") < poi_75),
+                               price_50)
+                         .when((col(colName).isNull()) & (col("poi_index") >= poi_75) & (col("poi_index") < poi_max),
+                               price_75)
+                         .otherwise(price_max)
+                         )
+
+    # -----零售户周边价格为0的零售户，使用KNN填充
+    # 价格不为0
+    exist_df = df2.where(col(colName) > 0).drop("poi_index")
+    # 价格为0
+    not_df = df2.where(col(colName) == 0).drop("poi_index")
+
+
+    if not_df.count()>0:
+        # knn填充
+        fill_pd_df = fillWithKNN(exist_df.toPandas(), not_df.toPandas(), colName)
+        # 合并
+        all_df = spark.createDataFrame(fill_pd_df).unionByName(exist_df)
+    else:
+        all_df=exist_df
+
+    #-----截断
+    #计算每个城市的 threshold
+    threshold = all_df.groupBy("city")\
+                     .agg((f.mean(col(colName)) + 3 * f.stddev_pop(col(colName))).alias("threshold"))
+    truncate_df = all_df.join(threshold, "city") \
+                        .withColumn(colName,
+                                    f.when(col(colName) > col("threshold"), col("threshold"))
+                                    .otherwise(col(colName))
+                                    )
+    #计算价格+1 的对数
+    log_df = truncate_df.withColumn("log", f.log(col(colName) + 1))
+
+    log_max = log_df.groupBy("city").agg(f.max("log").alias("log_max"))
+
+    result=log_df.join(log_max, "city") \
+                .withColumn(colName+"_index", col("log") / col("log_max") * 5)
+    #'city','cust_id','food_avg','poi_index','lng','lat','threshold','log','log_max','{colName}_index'
+    return result
+
+
+
+
 
 
 def get_consume_level(spark):
@@ -195,10 +400,10 @@ def get_consume_level(spark):
     :return:
     """
     # 租金 餐饮 酒店信息
-    rent_food_hotel = "/user/entrobus/tobacco_data/rent_food_hotel/"
-    poi = {"rent": "rent.csv",
-           "food": "food.csv",
-           "hotel": "hotel.csv"}
+
+    dp = {"rent": rent_path,
+           "food":food_path,
+           "hotel": hotel_path}
 
     try:
         cust_lng_lat = get_cust_lng_lat(spark).select("city", "cust_id", "lng", "lat") \
@@ -211,16 +416,15 @@ def get_consume_level(spark):
 
         # -------------租金
         print(f"{str(dt.now())}  rent")
-        path = rent_food_hotel + poi["rent"]
         # rent
-        rent = spark.read.csv(header=True, path=path) \
+        rent = spark.read.csv(header=True, path=dp["rent"]) \
             .withColumn("lng", col("longitude").cast("float")) \
             .withColumn("lat", col("latitude").cast("float")) \
             .select("lng", "lat", "price_1square/(元/平米)") \
             .dropna(subset=["lng", "lat", "price_1square/(元/平米)"])
 
         # 零售户一公里的每平米租金
-        city_rent = rent.join(cust_lng_lat, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
+        city_rent = cust_lng_lat.join(rent, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
                 col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
         # 每个零售户一公里范围内的每平米租金的均值
         city_rent_avg = city_rent.groupBy("city", "cust_id").agg(f.mean("price_1square/(元/平米)").alias("rent_avg"))
@@ -233,9 +437,8 @@ def get_consume_level(spark):
 
         # --------------餐饮
         print(f"{str(dt.now())}  food")
-        path = rent_food_hotel + poi["food"]
         # food
-        food = spark.read.csv(header=True, path=path) \
+        food = spark.read.csv(header=True, path=dp["food"]) \
             .withColumn("lng", col("lng").cast("float")) \
             .withColumn("lat", col("lat").cast("float")) \
             .select("lng", "lat", "mean_prices") \
@@ -254,9 +457,9 @@ def get_consume_level(spark):
 
         # --------------酒店
         print(f"{str(dt.now())}  hotel")
-        path = rent_food_hotel + poi["hotel"]
+
         # hotel
-        hotel = spark.read.csv(header=True, path=path) \
+        hotel = spark.read.csv(header=True, path=dp["hotel"]) \
             .withColumn("lng", col("lng").cast("float")) \
             .withColumn("lat", col("lat").cast("float")) \
             .select("lng", "lat", "price") \
@@ -264,7 +467,7 @@ def get_consume_level(spark):
 
         city_hotel = hotel.join(cust_lng_lat, (col("lng") >= col("lng_l")) & (col("lng") <= col("lng_r")) & (
                 col("lat") >= col("lat_d")) & (col("lat") <= col("lat_u")))
-        # 每个零售户一公里范围内的餐饮价格的均值
+        # 每个零售户一公里范围内的酒店价格的均值
         city_hotel_avg = city_hotel.groupBy("city", "cust_id").agg(f.mean("price").alias("hotel_avg"))
 
         # 各市25%分位值
@@ -354,10 +557,10 @@ def around_except_grade(around_cust, value_df,cust_cluster,cols:dict, grade=[3, 
 
 def except_grade(df, cols: dict, groupBy: list, grade: list):
     """
-        零售户指标与 全市/全市同档位 零售户相比
+        零售户指标与 {groupBy} 零售户相比
     :param df: 包含的columns:cust_id com_id cust_seg value
     :param cols:   列:cust_id,cols["value"]  cols["value"]:计算均值、标准差的值  如 条均价/订单额
-    :param groupBy: list   [city]/[city,cust_seg]   按照city或 city、ust_seg分组
+    :param groupBy: list   [city]/[city,cluster_index]   按照city或 city和聚类结果 分组
     :param grade: [3,4,5] 按照 3/4/5倍标准差分档
     """
 
@@ -406,7 +609,7 @@ def get_around_cust(spark,around:int):
                                         .withColumnRenamed("lng", "lng0") \
                                         .withColumnRenamed("lat", "lat0") \
                                         .select("city0","cust_id0","lng0","lat0")
-    #每个零售户  一公里的经度范围和纬度范围
+    #每个零售户  {around}公里的经度范围和纬度范围
     cust_lng_lat1 = cust_lng_lat.withColumn("scope",f.lit(around))\
                                 .withColumn("lng_l", lng_l(col("lng0"), col("lat0"),col("scope"))) \
                                 .withColumn("lng_r", lng_r(col("lng0"), col("lat0"),col("scope"))) \
@@ -418,7 +621,7 @@ def get_around_cust(spark,around:int):
                                 .withColumnRenamed("lat0", "lat1") \
                                 .select("city1","cust_id1","lng1","lat1", "lng_l", "lng_r", "lat_d", "lat_u")
     #每个零售户cust_id1 周边有cust_id0这些零售户
-    around_cust=cust_lng_lat.join(cust_lng_lat1,(col("lng0")>=col("lng_l")) & (col("lng0")<=col("lng_r")) & (col("lat0")>=col("lat_d")) & (col("lat0")<=col("lat_u")))\
+    around_cust=cust_lng_lat.join(cust_lng_lat1,(col("city1")==col("city0"))&(col("lng0")>=col("lng_l")) & (col("lng0")<=col("lng_r")) & (col("lat0")>=col("lat_d")) & (col("lat0")<=col("lat_u")))\
                             .select("city1","cust_id1","lng1","lat1","city0","cust_id0","lng0","lat0")
     return around_cust
 
@@ -431,10 +634,21 @@ def get_rating(spark,group):
                 brand_name:计算零售户对品牌的评分
     :return: cust_id,brand_name/item_id,rating
     """
+    # 卷烟id 卷烟名称
+    plm_item = get_plm_item(spark) \
+                      .where((col("is_mrb") == "1") & (col("item_kind") != "4")) \
+                      .select("item_id", "item_name")
+
+    #status:01,02 and  cust_seg!=ZZ
+    co_cust=get_valid_co_cust(spark)\
+                        .where(col("cust_seg")!='ZZ')
+
     # 开始计算评分
     # 1.获取近30天数据 并删除缺失值
     co_co_line = get_co_co_line(spark, scope=[0, 30]) \
-        .withColumn("brand_name", element_at(f.split("item_name", "\("), f.lit(1))) \
+        .join(co_cust, "cust_id") \
+        .join(plm_item,"item_id")\
+        .withColumn("brand_name", item_name_udf(col("item_name"))) \
         .select("cust_id", group, "qty_ord", "qty_rsn") \
         .na.drop()
 
@@ -464,14 +678,11 @@ def get_rating(spark,group):
 
 def get_co_cust(spark):
     # -----------------co_cust 零售客户信息表   全量更新  选取dt最新的数据
-    #"011114305", "011114306", "011114302"  邵阳 岳阳 株洲
-    cities=["011114305", "011114306", "011114302"]
     co_cust=spark.sql("select * from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST) and status !=04") \
                       .where(col("com_id").isin(cities))
     return co_cust
 def get_valid_co_cust(spark):
     #获取有效的零售户
-    cities = ["011114305", "011114306", "011114302"]
     co_cust=spark.sql("select * from DB2_DB2INST1_CO_CUST where dt=(select max(dt) from DB2_DB2INST1_CO_CUST)")\
                  .where((col("status").rlike("(01)|(02)")) & (col("com_id").isin(cities)))
     return co_cust
@@ -479,7 +690,6 @@ def get_valid_co_cust(spark):
 
 def get_crm_cust(spark):
     # ----------------crm_cust 零售客户信息表 为co_cust表的补充  全量更新  选取dt最新的数据
-    cities = ["011114305", "011114306", "011114302"]
     crm_cust=spark.sql("select * from DB2_DB2INST1_CRM_CUST where dt=(select max(dt) from DB2_DB2INST1_CRM_CUST)") \
                     .where(col("com_id").isin(cities))\
                     .withColumnRenamed("crm_longitude", "longitude") \
@@ -494,10 +704,10 @@ def get_co_co_01(spark,scope:list,filter="day"):
     :return:
     """
     # 获取co_co_01        unique_kind: 90 退货  10 普通订单    pmt_status:  0 未付款  1 收款完成
-    cities = ["011114305", "011114306", "011114302"]
     co_co_01 = spark.sql(
         "select  * from DB2_DB2INST1_CO_CO_01 where (unique_kind = 90 and pmt_status=0) or (unique_kind=10 and pmt_status=1)") \
-        .where(col("com_id").isin(cities))\
+        .where(col("com_id").isin(cities)) \
+        .where(col("born_date").rlike("\d{8}")) \
         .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
         .withColumn("today", f.current_date()) \
         .withColumn("qty_sum", col("qty_sum").cast("float")) \
@@ -535,16 +745,15 @@ def get_co_co_line(spark,scope:list,filter="day"):
         :param filter: 过滤类别  "day","week","month"  default:"day"
         :return:
         """
-    cities = ["011114305", "011114306", "011114302"]
     co_co_line = spark.sql(
         "select * from DB2_DB2INST1_CO_CO_LINE") \
         .where(col("com_id").isin(cities))\
+        .where(col("born_date").rlike("\d{8}"))\
         .withColumn("born_date", f.to_date("born_date", "yyyyMMdd")) \
         .withColumn("today", f.current_date()) \
         .withColumn("qty_ord", col("qty_ord").cast("float")) \
         .withColumn("price", col("price").cast("float"))\
-         .withColumn("qty_rsn",col("qty_rsn").cast("float"))\
-         .withColumn("amt",col("amt").cast("float"))
+        .withColumn("qty_rsn",col("qty_rsn").cast("float"))
 
     lower = scope[0]
     upper = scope[1]
@@ -603,9 +812,9 @@ def get_plm_item(spark):
 #----------------------------外部数据
 
 def get_coordinate(spark):
-    path = "/user/entrobus/tobacco_data/poi/coordinate.csv"
-    # 餐厅、交通、商城、娱乐场馆等经纬度
-    coordinate = spark.read.csv(header=True, path=path) \
+    #poi数据  餐厅、交通、商城、娱乐场馆等经纬度
+    coordinate = spark.read.csv(header=True, path=poi_path) \
+        .where(col("cityname").isin(["株洲市","邵阳市","岳阳市"]))\
         .withColumn("lng", col("longitude").cast("float")) \
         .withColumn("lat", col("latitude").cast("float"))
     return coordinate
@@ -616,9 +825,7 @@ def get_area(spark):
     :param spark:
     :return:
     """
-
-    path = "/user/entrobus/tobacco_data/saleCenterId_with_abcode/sale_center_id_abcode.csv"
-    area_code = spark.read.csv(path=path, header=True) \
+    area_code = spark.read.csv(path=center_path, header=True) \
                 .where(col("com_id").isin(cities))\
                 .withColumnRenamed("城市", "city") \
                 .withColumnRenamed("区", "county")
@@ -627,12 +834,12 @@ def get_area(spark):
 
 def get_cust_lng_lat(spark):
     """
-    获取零售户经纬度
+    获取零售户经纬度 column:city cust_id lng lat
     :param spark:
     :return:
     """
-    path = "/user/entrobus/tobacco_data/lng_lat/"
-    lng_lat = spark.read.csv(header=True, path=path) \
+
+    lng_lat = spark.read.csv(header=True, path=lng_lat_path) \
                         .withColumn("lng", col("lng").cast("float")) \
                         .withColumn("lat", col("lat").cast("float")) \
                         .dropna(how="any", subset=["lng", "lat"])
@@ -645,19 +852,21 @@ def get_city_info(spark):
     :param spark:
     :return:
     """
-    dir = "/user/entrobus/tobacco_data/gdp/"
-    cities = {"邵阳市": "邵阳统计数据.csv",
-              "岳阳市": "岳阳统计数据.csv",
-              "株洲市": "株洲统计数据.csv"}
+    #因为一些字段数据不统一，分开读
+    cities = {"邵阳市": shaoyang_stat_path,
+              "岳阳市": yueyang_stat_path,
+              "株洲市": zhuzhou_stat_path}
     dfs = []
     for city in cities.keys():
-        path = dir + cities[city]
+        path = cities[city]
         city_gdp = spark.read.csv(path, header=True) \
             .withColumn("city", f.lit(city))
         if city == "邵阳市":
             city_gdp = city_gdp.withColumn("mtime", f.to_date("mtime", "yy-MMM"))
         elif city == "岳阳市":
             city_gdp = city_gdp.withColumn("mtime", f.to_date("mtime", "MMM-yy"))
+        else:
+            city_gdp=city_gdp.withColumn("mtime",f.to_date("mtime","yyyy/MM/dd"))
 
         dfs.append(city_gdp)
 
@@ -666,35 +875,87 @@ def get_city_info(spark):
         df = df.unionByName(dfs[i])
 
     return df
+
 def get_city_ppl(spark):
     """
     获取人口数据
     :param spark:
     :return:
     """
-    dir="/user/entrobus/tobacco_data/population/"
-    cities={"株洲市":"株洲人口数据.csv",
-            "邵阳市":"邵阳人口数据.csv",
-            "岳阳市":"岳阳人口数据.csv"}
-    dfs=[]
-    for city in cities.keys():
-        path=dir+cities[city]
-        population=spark.read.csv(path,header=True)\
-                                .withColumn("总人口",f.trim(col("总人口")).cast("float"))\
-                                .withColumn("city",f.lit(city))
-        dfs.append(population)
+    population=spark.read.csv(population_path,header=True) \
+                       .withColumn("区县", f.regexp_replace(col("区县"), "城步县", "城步苗族自治县"))
+    cols = population.columns
+    cols.remove("区县")
+    for c in cols:
+        population = population.withColumn(c, f.col(c).cast("float"))
+    return population
 
-    df=dfs[0]
-    for i in range(1,len(dfs)):
-        df=df.union(dfs[i])
+def get_vfr(spark):
+    """
+     读取人流原始数据
+    :param spark:
+    """
+    cities = {"邵阳市": shaoyang_vfr_path, "岳阳市": yueyang_vfr_path, "株洲市": zhuzhou_vfr_path}
+    dfs = []
+    for city in cities:
+        path = cities[city]
+
+        df = spark.read.csv(path, header=True).withColumn("city", f.lit(city))
+        dfs.append(df)
+
+    df = dfs[0]
+    for i in range(1, len(dfs)):
+        df = df.unionByName(dfs[i])
     return df
+
+
+def get_rent(spark):
+    rent = spark.read.csv(header=True, path=rent_path) \
+        .withColumn("city",f.trim(col("市")))\
+        .withColumn("lng", col("longitude").cast("float")) \
+        .withColumn("lat", col("latitude").cast("float")) \
+        .withColumn("price",col("price_1square/(元/平米)").cast("float"))\
+        .select("city","lng", "lat", "") \
+        .dropna(subset=["lng", "lat", "price"])
+    return rent
+def get_food(spark):
+    food = spark.read.csv(header=True, path=food_path) \
+        .withColumn("city", f.trim(col("city"))) \
+        .withColumn("city", f.when(col("city") == "shaoyang", "邵阳市")
+                             .when(col("city") == "zhuzhou", "株洲市")
+                             .when(col("city") == "yueyang", "岳阳市")
+                    ) \
+        .withColumn("lng", col("lng").cast("float")) \
+        .withColumn("lat", col("lat").cast("float")) \
+        .withColumn("price", col("mean_prices").cast("float")) \
+        .select("city","lng", "lat", "mean_prices") \
+        .dropna(subset=["lng", "lat", "price"])
+    return food
+def get_hotel(spark):
+    hotel = spark.read.csv(header=True, path=hotel_path) \
+        .withColumn("city",f.trim(col("city")))\
+        .withColumn("city",f.when(col("city")=="shaoyang","邵阳市")
+                             .when(col("city")=="zhuzhou","株洲市")
+                             .when(col("city")=="yueyang","岳阳市")
+                    )\
+        .withColumn("lng", col("lng").cast("float")) \
+        .withColumn("lat", col("lat").cast("float")) \
+        .withColumn("price",col("price").cast("float"))\
+        .select("city","lng", "lat", "price") \
+        .dropna(subset=["lng", "lat", "price"])
+    return hotel
+
 
 def get_phoenix_table(spark,tableName):
     ph_df=spark.read.format("org.apache.phoenix.spark")\
             .option("table",tableName)\
             .option("zkUrl",zkUrl)\
             .load()
+    columns=ph_df.columns
+    for column in columns:
+        ph_df=ph_df.withColumnRenamed(column,column.lower())
     return ph_df
+
 
 
 
@@ -702,6 +963,7 @@ def get_phoenix_table(spark,tableName):
 #---------------获取生成的外部数据
 def get_near_cust(spark):
     """
+     已移除根据最近30个零售户来计算
      generate_data.py#generate_near_cust(spark)生成的
      YJFL001指标
      获取距离零售户最近的30个零售户
@@ -726,18 +988,37 @@ def get_around_vfr(spark):
     零售户周边人流数=零售户半径500m范围内平均人流
     平均人流=近30天所有记录中距离中心点最近的100个观测记录的均值（距离不超过500m，若不足100个则有多少算多少）
     """
-    path="/user/entrobus/tobacco_data/cust_avg_vfr"
-    avg_vfr=spark.read.csv(header=True,path=path)\
-                   .withColumn("avg_vfr",col("avg_vfr").cast("float"))
-    return avg_vfr
+    paths = ["岳阳市", "邵阳市", "株洲市"]
+    dfs=[]
+    for i in range(len(paths)):
+        path=paths[i]
+        whole_path=os.path.join(avg_vfr_path, path)
+        avg_vfr = spark.read.csv(whole_path,header=True)\
+                      .withColumn("avg_vfr",col("avg_vfr").cast("float"))
+        dfs.append(avg_vfr)
+
+
+    df=dfs[0]
+    for i in range(1,len(dfs)):
+        df=df.unionByName(dfs[i])
+
+    return df
 
 
 def get_all_consume_level(spark):
     #获取所有的零售户的消费水平
-    path="/user/entrobus/tobacco_data/cust_consume_level/"
-    consume_level_df=spark.read.csv(path=path,header=True)\
+    consume_level_df=spark.read.csv(path=cons_level_path,header=True)\
                                  .withColumn("consume_level",col("consume_level").cast("float"))
     return consume_level_df
+
+def get_cigar_rating(spark):
+    """
+    获取每个零售户对每个品规的评分
+    :param spark:
+    :return:
+    """
+    cigar_rating=spark.read.parquet(cigar_rating_path)
+    return cigar_rating
 
 
 def get_cust_cluster(spark):
@@ -747,7 +1028,18 @@ def get_cust_cluster(spark):
     :return:
     """
     # cust_id cluster_index
-    cluster_result = spark.read.csv("/user/entrobus/tobacco_data/cluster_result", header=True)
-    return cluster_result
+    cities = ["邵阳市", "岳阳市", "株洲市"]
+
+    dfs = []
+    for city in cities:
+        path = os.path.join(cluster_path, city)
+        df = spark.read.csv(path, header=True) \
+            .withColumn("city", f.lit(city))
+        dfs.append(df)
+
+    cluster_result = dfs[0]
+    for i in range(1, len(dfs)):
+        cluster_result = cluster_result.unionByName(dfs[i])
+    return cluster_result.drop("city")
 if __name__=="__main__":
     pass

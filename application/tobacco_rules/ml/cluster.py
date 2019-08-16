@@ -1,11 +1,3 @@
-# datetime:2019/5/30 14:35
-# -*- coding: utf-8 -*-
-"""
-Created on Tue May 21 15:04:17 2019
-
-@author: user
-"""
-
 import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 import pandas as pd
@@ -28,18 +20,25 @@ from sklearn.cluster import KMeans
 
 warnings.filterwarnings('ignore')
 
-############ read dataset from hive
-spark = SparkSession.builder.enableHiveSupport().getOrCreate()
-spark.sql('use aistrong')
 
-co_cust = spark.sql('''select cust_id from DB2_DB2INST1_CO_CUST 
-    where (status='01' or status='02') and com_id='011114306' and 
-    dt=(select max(dt) from DB2_DB2INST1_CO_CUST)''')
-co_co_line = spark.sql(
-    '''select co_num,item_id,qty_need,qty_ord,qty_rsn,price,amt,born_date,cust_id from DB2_DB2INST1_CO_CO_LINE''')
-co_co_line = co_co_line.join(co_cust[['cust_id']], on='cust_id', how='right')
-co_co = spark.sql('select cust_id,qty_sum,amt_sum,born_date from DB2_DB2INST1_CO_CO ')
-co_co = co_co.join(co_cust[['cust_id']], on='cust_id', how='right')
+############ read dataset from hive
+
+def read_hive(city_code,spark):
+    '''
+    取某个城市的零售户的co_co数据
+    '''
+    # spark = SparkSession.builder.enableHiveSupport().getOrCreate()
+    spark.sql('use aistrong')
+
+    co_cust = spark.sql('''select cust_id from DB2_DB2INST1_CO_CUST 
+        where (status='01' or status='02') and com_id=\'''' + city_code + '''\' and 
+        dt=(select max(dt) from DB2_DB2INST1_CO_CUST)''')  # 取某个城市cust_id
+    co_co_line = spark.sql(
+        '''select co_num,item_id,qty_need,qty_ord,qty_rsn,price,amt,born_date,cust_id from DB2_DB2INST1_CO_CO_LINE''')
+    co_co_line = co_co_line.join(co_cust[['cust_id']], on='cust_id', how='right')
+    co_co = spark.sql("select cust_id,qty_sum,amt_sum,born_date from DB2_DB2INST1_CO_CO where dt<='2019-06-04' ")
+    co_co = co_co.join(co_cust[['cust_id']], on='cust_id', how='right')
+    return co_co, co_cust
 
 
 def pandas_read_phoenix(cursor, sql_statement: str, batch=10):
@@ -67,17 +66,58 @@ def pandas_read_phoenix(cursor, sql_statement: str, batch=10):
     return df
 
 
-def get_recent_days_order(df, tm_col, lag):
+def pyspark_read_phoenix(table_name, city,spark):
+    # spark = SparkSession.builder.appName("spark hbase") \
+    #     .master("local[*]") \
+    #     .getOrCreate()
+    ret_df = spark.read.format("org.apache.phoenix.spark") \
+        .option("table", table_name) \
+        .option("zkUrl", "10.72.59.91:2181") \
+        .load()
+    # print('Done!')
+    # ret_df = ret_df.filter(("city='岳阳市'")&(("status = '01'")|("status = '02'")))
+    ret_df = ret_df[(ret_df['city'] == city) & ((ret_df['status'] == '01') | (ret_df['status'] == '02'))]
+    ret_df = ret_df[['cust_id',
+                     'abcode',
+                     'order_way',
+                     'periods',
+                     'work_port',
+                     'base_type',
+                     'sale_scope',
+                     'scope',
+                     'com_chara',
+                     'sale_large',
+                     'rail_cust',
+                     'area_type',
+                     'multiple_shop',
+                     'night_shop',
+                     'consumer_group',
+                     'consumer_attr',
+                     'grade',
+                     'catering_cons_count',
+                     'convenient_trans_count',
+                     'shopping_cons_count',
+                     'entertainment_count',
+                     'accommodation_avg',
+                     'order_competitive_index',
+                     'people_count']]
+    return ret_df.toPandas()
+
+
+def get_recent_days_order(df, tm_col, co_cust, lag, now=1):
     '''
     get orders of recent days
 
     args:
         df: dataset to get orders
         tm_col: column of time
-        lag: include orders of last recent lag days
+        lag: include orders  of last recent lag days 
     '''
-
-    now = datetime.datetime.strftime(datetime.datetime.now() - datetime.timedelta(days=lag), format='%Y%m%d')
+    if now:
+        now = datetime.datetime.strftime(datetime.datetime.now() - datetime.timedelta(days=lag), format='%Y%m%d')
+    else:
+        now = datetime.datetime.strftime(datetime.datetime(2019, 6, 1) - datetime.timedelta(days=lag), format='%Y%m%d')
+    print(now)
     df = df[df[tm_col] >= now]
     df = co_cust.select(F.col('cust_id')).join(df, on='cust_id', how='left')
     df = df.fillna(0)
@@ -221,7 +261,7 @@ def build_decoder(enc_out, cat_cols, num_cols, emb_dim):
 
     return:
         ret_outs: the output layers of decoder
-        losses:
+        losses: 
         loss_weights:
     '''
 
@@ -272,52 +312,67 @@ def get_input_output(df, num_cols, cat_cols):
     return X_in, X_out
 
 
-def main():
-    ########## get features dataframe from hbase table
-    sql = '''
-        select cust_id,
-        abcode,
-        order_way,
-        periods,
-        work_port,
-        base_type,
-        sale_scope,
-        scope,
-        com_chara,
-        sale_large,
-        rail_cust,
-        area_type,
-        multiple_shop,
-        night_shop,
-        consumer_group,
-        consumer_attr,
-        grade,
-        catering_cons_count,
-        convenient_trans_count,
-        shopping_cons_count,
-        entertainment_count,
-        accommodation_avg,
-        order_competitive_index,
-        people_count
-        from tobacco.retail where city='岳阳市' and (status='01' or status='02')
-        '''
+def main(city,phoenix_table,result_path,spark):
+    city_dict = {'岳阳市': '011114306', '邵阳市': '011114305', '株洲市': '011114302'}
+
+    ########## get features dataframe from hdfs
+    # sql = '''
+    #     select cust_id,
+    #     abcode,
+    #     order_way,
+    #     periods,
+    #     work_port,
+    #     base_type,
+    #     sale_scope,
+    #     scope,
+    #     com_chara,
+    #     sale_large,
+    #     rail_cust,
+    #     area_type,
+    #     multiple_shop,
+    #     night_shop,
+    #     consumer_group,
+    #     consumer_attr,
+    #     grade,
+    #     catering_cons_count,
+    #     convenient_trans_count,
+    #     shopping_cons_count,
+    #     entertainment_count,
+    #     accommodation_avg,
+    #     order_competitive_index,
+    #     people_count
+    #     from tobacco.retail where city='岳阳市' and (status='01' or status='02')
+    #     '''
     # rent_info_avg,
     # morning_stream,
     # noon_stream,
     # night_stream,
     # weekend_stream,
     # mid_week_stream,
-    database_url = "http://10.72.32.26:8765"
-    conn = phoenixdb.connect(database_url, max_retries=3, autocommit=True)
-    cursor = conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
-    yyfeat_df = pandas_read_phoenix(cursor, sql, batch=100)
-    yyfeat_df.columns = [x.lower() for x in yyfeat_df.columns]
+    # database_url = "http://10.72.32.26:8765"
+    # conn = phoenixdb.connect(database_url, max_retries=3, autocommit=True)
+    # cursor = conn.cursor(cursor_factory=phoenixdb.cursor.DictCursor)
+    # yyfeat_df = pandas_read_phoenix(cursor, sql, batch=100)
+    # yyfeat_df.columns = [x.lower() for x in yyfeat_df.columns]
+
+    # spark = SparkSession.builder.appName("spark hbase") \
+    #     .enableHiveSupport() \
+    #     .master("local[*]") \
+    #     .getOrCreate()
+    # yyfeat_df = pyspark_read_phoenix("TOBACCO.RETAIL", city, spark)
+    yyfeat_df = pyspark_read_phoenix(phoenix_table, city,spark)
 
     ########## modify null value of area_type column
     yyfeat_df['area_type'] = yyfeat_df['area_type'].apply(lambda x: x if x != 'NU' else 'NULL')
 
     ######### aggregate orders in recent 30 days
-    cc_30_df = get_recent_days_order(co_co, 'born_date', 30)
+    try:
+        city_code = city_dict[city]
+    except:
+        print('所输入城市不在city_dict中，合法城市为：\n', city_dict.keys())
+        return 0
+    co_co, co_cust = read_hive(city_code,spark)
+    cc_30_df = get_recent_days_order(co_co, 'born_date', co_cust, 30, 0)
     # ccl_30_df = get_recent_days_order(co_co_line,'born_date',30)
     # ccl_30_item_df = get_item_order_feat(ccl_30_df, gb_c=['cust_id'], pivot_c='item_id', val_c='qty_ord')
     for i, c in enumerate(['qty_sum', 'amt_sum']):
@@ -340,11 +395,13 @@ def main():
     cat_cols = [x for x in not_null_col if x not in ['cust_id'] + num_cols]
     print('num_cols: ', num_cols)
     print('cat_cols: ', cat_cols)
+    # return df
     for col in not_null_col:
         if df[col].isnull().sum() > 0:
             if col in cat_cols:
                 df[col] = df[col].fillna('NULL')
             else:
+                df[col] = df[col].apply(lambda x: str(x).replace('None', '0'))
                 df[col] = df[col].fillna(0).astype('float')
 
     ######## label encode cate columns
@@ -385,17 +442,6 @@ def main():
     cluster_df['cluster_index'] = km.fit_predict(np.array(list(map(list, cluster_df.encoder_output.values))))
 
     result = spark.createDataFrame(cluster_df[['cust_id', 'cluster_index']])
-    file_path = '/user/entrobus/tobacco_data_530/cluster_result'
+    # file_path = '/user/entrobus/tobacco_data_630/cluster_result/' + city
+    file_path=os.path.join(result_path,city)
     result.repartition(1).write.csv(path=file_path, header=True, sep=",", mode='overwrite')
-
-
-if __name__ == '__main__':
-    main()
-
-
-
-
-
-
-
-

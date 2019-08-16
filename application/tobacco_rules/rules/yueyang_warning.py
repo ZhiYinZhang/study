@@ -5,19 +5,23 @@ import traceback as tb
 from pyspark.sql import functions as f
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
-from application.tobacco_rules.rules.write_hbase import write_hbase2
-from application.tobacco_rules.rules.utils import *
 from pyspark.sql import Window
 from datetime import datetime as dt
+import json
+from rules.write_hbase import write_hbase2,write_hbase1,delete_all
+from rules.utils import *
+from rules.config import *
 
-
+"""
+岳阳预警
+"""
 spark = SparkSession.builder.enableHiveSupport().appName("yueyang_warning").getOrCreate()
 sc=spark.sparkContext
 sc.setLogLevel("WARN")
 
 spark.sql("use aistrong")
 
-hbase={"table":"TOBACCO.WARNING_CODE","families":["0"],"row":"cust_id"}
+hbase={"table":warning_code_table,"families":["0"],"row":"classify_id"}
 # hbase={"table":"test1","families":["0"],"row":"cust_id"}
 
 
@@ -42,6 +46,7 @@ def get_same_vfr_grade_excpet():
 
     # 每个零售户平均人流
     around_vfr = get_around_vfr(spark).withColumnRenamed("cust_id", "cust_id0")
+    #零售户聚类结果
     cust_cluster = get_cust_cluster(spark)
 
 
@@ -84,7 +89,7 @@ def get_around_order_except():
         co_cust = get_valid_co_cust(spark).select("cust_id", "com_id", "sale_center_id") \
             .join(area_code, ["com_id", "sale_center_id"])
 
-
+        #近30天的订单数据
         co_co_01 = get_co_co_01(spark, scope=[0, 30]) \
             .select("qty_sum", "amt_sum", "cust_id")
 
@@ -152,14 +157,18 @@ def get_around_order_except():
 #-----零售户省内外烟订货金额比例与周边一公里范围内零售户省内外烟订货金额比例不符
 #-----零售户省内外烟订货数量比例与周边一公里范围内零售户省内外烟订货数量比例不符
 def get_around_item_except():
+    # 获取每个零售户 city sale_center_id
     area_code=get_area(spark).dropDuplicates(["com_id","sale_center_id"]).select("com_id","sale_center_id","city")
     co_cust=get_valid_co_cust(spark).select("cust_id","com_id","sale_center_id")\
                                           .join(area_code,["com_id","sale_center_id"])
 
+    #获取近30天订单数据
     co_co_line = get_co_co_line(spark,scope=[0,30])\
                     .select("cust_id", "item_id", "qty_ord", "price", "amt")
 
+    #获取cust_id周边一公里零售户
     around_cust = get_around_cust(spark, 1).select("cust_id1","cust_id0")
+    #获取聚类结果
     cust_cluster=get_cust_cluster(spark)
 
     print(f"{str(dt.now())}  零售户高档烟订货比例与周边一公里范围内零售户订货比例不符")
@@ -191,8 +200,8 @@ def get_around_item_except():
         tb.print_exc()
 
 
-    #零售户省内外烟订货金额比例=省内烟订货金额/省外烟订货金额
-    # 零售户省内外烟订货比例 = 省内烟订货数量 / 省外烟订货数量
+    #零售户省内外烟订货金额比例=省内烟订货金额 / 省外烟订货金额
+    #零售户省内外烟订货比例 = 省内烟订货数量 / 省外烟订货数量
     try:
         #金额
         cols1 = {"value": "month_amount_ratio",
@@ -495,3 +504,34 @@ def get_avg_cons_except():
         tb.print_exc()
 # get_avg_cons_except()
 
+
+
+from ml.warning import get_warning_result
+def get_warning():
+    try:
+        print("删除过期预警数据")
+        levels=["YJFL004","YJFL012","YJFL003","YJFL001"]
+        for level in levels:
+             print(f"预警级别:{level}")
+             delete_all(hbase["table"],row_prefix=level)
+
+
+
+        print(f"{str(dt.now())} 预警")
+        result = get_warning_result(white_list, city='岳阳市', com_id='011114306', day='20190601',
+                                    cluster_dir=cluster_path+"/")
+
+        #highprice_30days_order 里面的数值要是float类型
+        result["highprice_30days_order"] = result["highprice_30days_order"].apply(
+            lambda x: json.dumps(x, ensure_ascii=False))
+
+
+        df = spark.createDataFrame(result)\
+                  .withColumn("classify_id",f.concat_ws("_",col("classify_level1_code"),col("cust_id")))
+
+        cols=df.columns
+        cols.remove("classify_id")
+        df.foreachPartition(lambda x:write_hbase1(x,cols,hbase))
+
+    except Exception:
+        tb.print_exc()

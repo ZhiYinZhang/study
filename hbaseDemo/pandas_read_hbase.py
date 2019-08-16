@@ -6,7 +6,7 @@ import pandas as pd
 from happybase import Table
 import pdhbase as pdh
 
-host="10.72.32.26"
+host="10.72.59.89"
 
 
 def pd_read_hbase0(table,families):
@@ -75,15 +75,17 @@ def pd_read_hbase1(table,family,cols,upper=False,limit=1000):
     # print(df)
     return df
 
-def pd_write_hbase(df: pd.DataFrame, cols: list):
+
+def pd_write_hbase(df: pd.DataFrame, hbase, cols: list, upper=False):
     """
     :param df:  pandas DataFrame
+    :param hbase  hbase={"table":"test1","families":["0"],"row":"id"}
     :param cols: 除row_key之外
     """
-    host = "10.72.32.26"
-    table = "member3"
-    row = "sale_center_id"
-    family = "column_A"
+    host = "10.72.59.89"
+    table = hbase["table"]
+    row = hbase["row"]
+    family = hbase["families"][0]
 
     pool = hb.ConnectionPool(host=host, size=10)
     with pool.connection() as conn:
@@ -97,7 +99,12 @@ def pd_write_hbase(df: pd.DataFrame, cols: list):
 
                     data = {}
                     for y in range(len(cols)):
-                        fly_col = f"{family}:{cols[y]}"
+                        if upper:
+                            c = cols[y].upper()
+                        else:
+                            c = cols[y]
+
+                        fly_col = f"{family}:{c}"
                         data[fly_col] = str(l[y])
                     batch.put(row=str(row_key), data=data)
         except Exception as e:

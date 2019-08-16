@@ -43,9 +43,9 @@ if __name__=="__main__":
     #高德api 需要购买key
     key = "e5c7aff5f51f96e8ef3d90aea5148cc2"
     # cust_id city busi_addr
-    src_path = "E:/chromeDownload/cust_addr.csv"
+    src_path = "E:/chromeDownload/cust_addr1.csv"
     # cust_id city busi_addr lng lat
-    result_path="e:/test/cust_lng_lat.csv"
+    result_path="e:/test/cust_lng_lat/cust_lng_lat1.csv"
 
     print(str(dt.now()))
     convert_lng_lat(src_path,result_path,key)

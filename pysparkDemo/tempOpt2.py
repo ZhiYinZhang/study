@@ -4,44 +4,21 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as f
 from pyspark.sql.functions import col
 from pyspark.sql import Window
-from application.tobacco_rules.rules import write_hbase1
+
+import time
+from datetime import datetime as dt
 spark=SparkSession.builder.appName("test").master("local[*]").getOrCreate()
 
+f.element_at
+import sys
+sys.exit()
+from apscheduler.schedulers.blocking import BlockingScheduler
 
-cigar=spark.read.csv("E:\资料\project\烟草\外部数据/cigar_sales_need0.csv",header=True)\
-              .select("item_name")
-
-
-cigar.withColumn("brand_name",f.element_at(f.split("item_name","\("),1))\
-     .dropDuplicates(["brand_name"])\
-     .withColumn("brand_id",f.row_number().over(Window.orderBy("brand_name")))\
-     .select("brand_name","brand_id")\
-     .repartition(1).write.csv("e://test//brand",header=True,mode="overwrite")
+scheduler=BlockingScheduler()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+scheduler.add_job(func=lambda :print(dt.now()),trigger="cron",second="*/1")
+scheduler.start()
 
 
 

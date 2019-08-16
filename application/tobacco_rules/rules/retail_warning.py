@@ -5,18 +5,21 @@ import traceback as tb
 from pyspark.sql import functions as f
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
-from application.tobacco_rules.rules.write_hbase import write_hbase1
-from application.tobacco_rules.rules.utils import *
 from pyspark.sql import Window
 from datetime import datetime as dt
-
+from rules.write_hbase import write_hbase1
+from rules.utils import *
+from rules.config import retail_warning_table
+"""
+邵阳预警
+"""
 spark = SparkSession.builder.enableHiveSupport().appName("retail warning").getOrCreate()
 sc=spark.sparkContext
 sc.setLogLevel("WARN")
 
 spark.sql("use aistrong")
 
-hbase={"table":"TOBACCO.RETAIL_WARNING","families":["0"],"row":"cust_id"}
+hbase={"table":retail_warning_table,"families":["0"],"row":"cust_id"}
 # hbase={"table":"test1","families":["0"],"row":"cust_id"}
 
 
@@ -672,7 +675,7 @@ def get_avg_cons_level():
                         .foreachPartition(lambda x:write_hbase1(x,values,hbase))
     except Exception:
         tb.print_exc()
-get_avg_cons_level()
+# get_avg_cons_level()
 
 
 

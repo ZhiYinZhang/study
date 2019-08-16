@@ -59,10 +59,10 @@ if __name__=="__main__":
         .getOrCreate()
     sc = spark.sparkContext
 
-    # host = '10.72.59.89'
-    host='10.18.0.12'
+    host = '10.72.59.91'
+    # host='10.18.0.12'
     # table = 'TOBACCO.AREA'
-    table="table"
+    table="TEST3"
     conf = {"hbase.zookeeper.quorum": host,
             "hbase.mapreduce.inputtable": table,
             "hbase.client.scanner.timeout.period":"120000"
@@ -82,6 +82,8 @@ if __name__=="__main__":
                                    valueConverter=valueConv,
                                    conf=conf)
 
-    df=rdd_to_df(hbase_rdd)
-    df.show()
+    # df=rdd_to_df(hbase_rdd)
+    # df.show()
 
+
+    spark.createDataFrame(hbase_rdd).describe

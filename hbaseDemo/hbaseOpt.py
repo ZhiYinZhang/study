@@ -110,7 +110,7 @@ def delete(table_name,family,cols:list,upper_case=False):
                     # print(row[0],row[1])
                     batch.delete(row[0],cols)
 
-def delete_all(table_name,column):
+def delete_all(table_name,columns):
     """
 
     :param table_name: 表名
@@ -121,11 +121,17 @@ def delete_all(table_name,column):
         table = conn.table(table_name)
 
         print(table_name)
-        rows = table.scan(columns={f"0:{column}"})
+
+
+        for i in range(len(columns)):
+               columns[i]=f"0:{columns[i]}"
+
+        rows = table.scan(columns=columns)
         size=0
         with table.batch(batch_size=10000) as batch:
             for row in rows:
                 size+=1
+                print(row)
                 # print(row[0],row[1])
                 batch.delete(row[0])
         print("size:",size)
@@ -145,47 +151,46 @@ hbase={"host":"10.72.59.89","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    prefix="V530_TOBACCO."
-    tables=["TEST","test2",
+    prefix="V630_TOBACCO."
+    tables=["TEST","test1",
             prefix+"AREA",prefix+"RETAIL",
             prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
             prefix+"DATA_INDEX",prefix+"BLOCK_DATA",
             prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS"]
-    hbase["table"]=tables[3]
+    hbase["table"]=tables[9]
 
     hbase["families"] = "0"
 
     # hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
 
-    conn=happybase.Connection(host=hbase["host"])
-    table=conn.table(hbase["table"])
+    # conn=happybase.Connection(host=hbase["host"])
+    # # table=conn.table(hbase["table"])
+    # table = conn.table("V630_TOBACCO.GEARS_TOSS")
+    # rows=table.scan(row_prefix=bytes("YJFL004","utf-8"))
+    # # print(type(rows))
+    # for row in rows:
+    #     print(row)
 
 
-
+    # table.put(row="01111430206",data={"0:COUNTY":"['渌口区']"})
 
     #写数据
     # print(str(dt.now()))
     # with table.batch(batch_size=1000) as batch:
-    #     for i in range(0,1):
-    #         batch.put(row=f"{'abcdef'}",data={"0:AGE":f"{randint(0,100)}","0:NAME":f"Tom{i}"})
+    #     for i in range(5,10):
+    #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,1)}","0:name":f"Tom{i}","0:high":f"{i}"})
     # print(str(dt.now()))
 
 
+
     #读数据
-    cols = {
-        "value": "qty_sum",
-        "abnormal": "sum_abno_time",
-        "mean_plus_3std": "last_sum_plus3",
-        "mean_minus_3std": "last_sum_minu3",
-        "mean": "last_sum_mean"
-    }
-    values = list(cols.values())
-    cols = ["sum_last_week", "sum_last_two_week", "sum_last_four_week"]
+    cols = ["gauge_week_reserve_ratio","gauge_week_reserve_face"]
     rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=100)
     for row in rows:
-            print(row)
-            # print(decode(row,family=hbase["families"],cols=["in_prov_items","out_prov_items"],upper_case=True))
+            print(row[0],row[1])
+            # table.put(row=row[0],data=row[1])
+            # print(decode(row,family=hbase["families"],cols=["county"],upper_case=True))
 
 
 
@@ -196,5 +201,5 @@ if __name__=="__main__":
 
 
     # print(str(dt.now()))
-    # delete_all(tables[3],"CUST_ID")
+    # delete_all("test2",["age","name"])
     # print(str(dt.now()))
