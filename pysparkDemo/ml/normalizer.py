@@ -13,3 +13,4 @@ svec=Vectors.sparse(4,{1:4.0,3:3.0})
 dvec=Vectors.dense([3.0,-4.0])
 print(svec)
 print(dvec)
+

@@ -86,7 +86,9 @@ if __name__=="__main__":
 
        try:
            #成功:succ为hdfs的目标路径
-           succ=cli.upload("/user/entrobus/zhangzy/test/test1/株洲统计数据1.csv","E:\资料\project\烟草\外部数据\GDP\株洲统计数据.csv",overwrite=True)
+           tgt="/user/entrobus/zhangzy/dataset/"
+           src="E:\\资料\\project\\烟草\\外部数据0\\城市与comId\\comId_city.csv"
+           succ=cli.upload(tgt,src,overwrite=True)
        except Exception as e:
             tb.print_exc()
             if times==3:

@@ -15,44 +15,27 @@ spark = SparkSession.builder.appName("spark hbase") \
     .getOrCreate()
 sc:SparkContext = spark.sparkContext
 
+# spark.read.parquet("hdfs://10.72.59.89:8020/user/entrobus/zhangzy/v630_tobacco.area").show()
 
-# zkUrl="10.72.59.91:2181"
-zkUrl="10.18.0.34:2181"
-table="v630_tobacco.ciga_picture"
-df=spark.read.format("org.apache.phoenix.spark")\
+
+
+zkUrl="10.72.59.91:2181"
+# # zkUrl="10.18.0.34:2181"
+table="v630_tobacco.area"
+read_df=spark.read.format("org.apache.phoenix.spark")\
         .option("table",table)\
         .option("zkUrl",zkUrl)\
         .load()
-
-json_udf=f.udf(f=lambda x:json.dumps(x))
-df.select("row","gauge_id","gauge_prop_like_ciga")\
-     .where(col("gauge_prop_like_ciga").isNotNull())\
-    .show(truncate=False)
-     # .groupBy("row")\
-     # .agg(f.collect_list(col("gauge_prop_like_ciga")).alias("gauge_prop_like_ciga"))\
-     # .withColumn("gauge_prop_like_ciga",json_udf(col("gauge_prop_like_ciga")))\
-     # .write \
-     #  .format("org.apache.phoenix.spark") \
-     #  .mode("overwrite") \
-     #  .option("table",table) \
-     #  .option("zkUrl",zkUrl ) \
-     #  .save()
-
-
-
-
-
-
-# df=spark.range(10)\
-#           .withColumn("id",col("id").cast("string"))\
-#           .withColumn("name",f.lit("tom111"))
-
-
-# df.write \
+#
+read_df.show()
+#
+# zkUrl="10.18.0.34:2181"
+#
+# read_df.limit(10000).write \
 #   .format("org.apache.phoenix.spark") \
 #   .mode("overwrite") \
-#   .option("table", "tobacco.area") \
-#   .option("zkUrl",zkUrl ) \
+#   .option("table", table) \
+#   .option("zkUrl",zkUrl) \
 #   .save()
 
 # ph_df.show()

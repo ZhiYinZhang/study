@@ -64,10 +64,9 @@ def decode(row,family,cols:list,upper_case=False):
               pass
     return [row[0],data]
 
-def get(table_name,family,cols:list,upper_case=False,limit=100):
+def get(table_name,family,cols:list,upper_case=False,limit=100,row_prefix=None):
     conn = happybase.Connection(host=hbase["host"])
     table = conn.table(table_name)
-
     print(table_name, family)
 
     if upper_case:
@@ -84,7 +83,7 @@ def get(table_name,family,cols:list,upper_case=False,limit=100):
         fly_cols.append(fly_col)
 
     print(fly_cols)
-    rows = table.scan(columns=fly_cols, limit=limit)
+    rows = table.scan(columns=fly_cols, limit=limit,row_prefix=row_prefix)
 
     return rows
 
@@ -156,7 +155,8 @@ if __name__=="__main__":
             prefix+"AREA",prefix+"RETAIL",
             prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
             prefix+"DATA_INDEX",prefix+"BLOCK_DATA",
-            prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS"]
+            prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS",
+            prefix+"CIGA_GRADE"]
     hbase["table"]=tables[9]
 
     hbase["families"] = "0"
@@ -164,29 +164,30 @@ if __name__=="__main__":
     # hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
 
-    # conn=happybase.Connection(host=hbase["host"])
-    # # table=conn.table(hbase["table"])
+    # hbase["table"]="V530_TOBACCO.CODE"
+    conn=happybase.Connection(host=hbase["host"])
+    # table=conn.table(hbase["table"])
     # table = conn.table("V630_TOBACCO.GEARS_TOSS")
     # rows=table.scan(row_prefix=bytes("YJFL004","utf-8"))
     # # print(type(rows))
     # for row in rows:
     #     print(row)
 
-
     # table.put(row="01111430206",data={"0:COUNTY":"['渌口区']"})
 
     #写数据
+
     # print(str(dt.now()))
     # with table.batch(batch_size=1000) as batch:
     #     for i in range(5,10):
-    #         batch.put(row=f"{i}",data={"0:age":f"{randint(0,1)}","0:name":f"Tom{i}","0:high":f"{i}"})
+    #         batch.put(row=f"{i}",data={"0:CITY":f"{randint(0,1)}","0:COUNTY":f"Tom{i}","0:COM_ID":f"{i}"})
     # print(str(dt.now()))
-
+    # table.scan()
 
 
     #读数据
-    cols = ["gauge_week_reserve_ratio","gauge_week_reserve_face"]
-    rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=100)
+    cols = ["gauge_week_again"]
+    rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=1000,row_prefix=None)
     for row in rows:
             print(row[0],row[1])
             # table.put(row=row[0],data=row[1])
@@ -195,7 +196,7 @@ if __name__=="__main__":
 
 
     # print(str(dt.now()))
-    # cols=["one_id_more_retail","one_tel_more_retail","one_bank_more_retail","one_ip_more_retail","order_ip_addr"]
+    # cols=["gauge_prop_like_ciga"]
     # delete(table_name=hbase["table"],family=hbase["families"],cols=cols,upper_case=True)
     # print(str(dt.now()))
 

@@ -36,7 +36,12 @@ def get_status(location:str):
     else:
         pprint.pprint(location)
 
+
 def get_sessions():
+    """
+    获取所有的session
+    :return: {"idle":[],"busy":[]}
+    """
     response = requests.get(url=livy_host+'/sessions',headers=headers)
     sessions = {}
     idle = []

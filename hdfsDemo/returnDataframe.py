@@ -7,6 +7,7 @@ import json
 from hdfsDemo.hdfsClient import *
 import pandas as pd
 from hdfs.client import InsecureClient
+from hdfs.ext.dataframe import read_dataframe,write_dataframe
 def get_pd_DF(cli:InsecureClient,file_path):
     """
        读取hdfs上的csv文件，返回pandas的DataFrame

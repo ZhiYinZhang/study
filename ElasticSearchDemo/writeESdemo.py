@@ -7,8 +7,8 @@ import random
 import numpy as np
 
 #循环写入es
-es=Elasticsearch(hosts='http://10.18.0.19',port=9200,http_auth=('elastic','elastic'))
-index='test'
+es=Elasticsearch(hosts='http://10.18.0.34',port=9200)
+index='griffin'
 if not es.indices.exists(index):
     map = {"mappings": {
         "log": {
@@ -16,10 +16,34 @@ if not es.indices.exists(index):
         }
     }
     }
+    griffin={
+        "aliases": {},
+        "mappings": {
+                "properties": {
+                    "name": {
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        },
+                        "type": "text"
+                    },
+                    "tmst": {"type": "date"}
+                }
+        },
+        "settings": {
+            "index": {
+                "number_of_replicas": "2",
+                "number_of_shards": "5"
+            }
+        }
+    }
+
     # 创建索引
-    es.indices.create(index=index, body=map)
-i=0
-l=['error','debug','info','warn']
+    es.indices.create(index=index, body=griffin)
+# i=0
+# l=['error','debug','info','warn']
 # while 1:
 #     level=l[random.randrange(0,l.__len__())]
 #
