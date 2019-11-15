@@ -150,14 +150,14 @@ hbase={"host":"10.72.59.89","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    prefix="V630_TOBACCO."
+    prefix="V530_TOBACCO."
     tables=["TEST","test1",
             prefix+"AREA",prefix+"RETAIL",
             prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
             prefix+"DATA_INDEX",prefix+"BLOCK_DATA",
             prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS",
             prefix+"CIGA_GRADE"]
-    hbase["table"]=tables[9]
+    hbase["table"]=tables[5]
 
     hbase["families"] = "0"
 
@@ -166,6 +166,11 @@ if __name__=="__main__":
 
     # hbase["table"]="V530_TOBACCO.CODE"
     conn=happybase.Connection(host=hbase["host"])
+    table=conn.table(hbase["table"])
+    rows=table.scan(columns=["0:CLASSIFY_LEVEL1_CODE"],limit=10)
+    for i in rows:
+       print(i)
+
     # table=conn.table(hbase["table"])
     # table = conn.table("V630_TOBACCO.GEARS_TOSS")
     # rows=table.scan(row_prefix=bytes("YJFL004","utf-8"))
@@ -186,10 +191,10 @@ if __name__=="__main__":
 
 
     #读数据
-    cols = ["gauge_week_again"]
-    rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=1000,row_prefix=None)
-    for row in rows:
-            print(row[0],row[1])
+    # cols = ["gauge_week_again"]
+    # rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=1000,row_prefix=None)
+    # for row in rows:
+    #         print(row[0],row[1])
             # table.put(row=row[0],data=row[1])
             # print(decode(row,family=hbase["families"],cols=["county"],upper_case=True))
 

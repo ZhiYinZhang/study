@@ -8,7 +8,7 @@ from hdfsDemo.hdfsClient import *
 import pandas as pd
 from hdfs.client import InsecureClient
 from hdfs.ext.dataframe import read_dataframe,write_dataframe
-def get_pd_DF(cli:InsecureClient,file_path):
+def get_pd_df(cli:InsecureClient,file_path):
     """
        读取hdfs上的csv文件，返回pandas的DataFrame
     :param cli: hdfs的InsecureClient
@@ -18,7 +18,7 @@ def get_pd_DF(cli:InsecureClient,file_path):
     with cli.read(file_path) as reader:
                 df_pd = pd.read_csv(reader)
     return df_pd
-def save_pd_DF(df_pd:pd.DataFrame,cli:InsecureClient,file_path):
+def save_pd_df(df_pd:pd.DataFrame,cli:InsecureClient,file_path):
     """
      将pandas的DataFrame写入hdfs  csv
     :param df_pd: pandas的DataFrame

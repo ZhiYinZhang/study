@@ -63,8 +63,10 @@ print(df)
 
 
 #-----饼图   展示某列各个值的占比
-# df.plot.pie(y="a")
-# plt.show()
+ax=df.plot.pie(y="a")
+ax.set_picker(picker=True)
+help(ax)
+plt.show()
 
 
 # class 里面的值 指的是 value的每个值的含义
