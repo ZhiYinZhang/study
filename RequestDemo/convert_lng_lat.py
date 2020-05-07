@@ -44,7 +44,7 @@ def convert_lng_lat(src_path,result_path,index,key="e5c7aff5f51f96e8ef3d90aea514
                 gd_lng_lat = location.split(",")
                 # lng = gd_lng_lat[0]
                 # lat = gd_lng_lat[1]
-
+                print(f"高德:{gd_lng_lat}")
                 #高德-》百度
                 bd_lng_lat=gcj02_to_bd09(float(gd_lng_lat[0]),float(gd_lng_lat[1]))
                 lng = bd_lng_lat[0]
@@ -91,10 +91,10 @@ if __name__=="__main__":
     key = "e5c7aff5f51f96e8ef3d90aea5148cc2"
 
     # cust_id,city,busi_addr,com_id
-    src_path = "E:/test/cust_lng_lat/cust_addr/cust_addr.csv"
+    src_path = "E:/test/cust_lng_lat/20200429/cust_addr.csv"
     # cust_id,city,busi_addr,com_id,lng,lat
-    result_path="e:/test/cust_lng_lat/cust_addr/cust_lng_lat.csv"
+    result_path="e:/test/cust_lng_lat/20200429/cust_lng_lat.csv"
 
     print(str(dt.now()))
-    convert_lng_lat(src_path,result_path,index={"city":1,"addr":2},key=key)
+    convert_lng_lat(src_path,result_path,index={"city":0,"addr":3},key=key)
     print(str(dt.now()))

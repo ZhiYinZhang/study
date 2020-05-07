@@ -49,6 +49,7 @@ def excel_to_mysql(file,tables,cols):
             print(f"write {sql_table}")
             # print(df)
             df.to_sql(name=sql_table,con=engine,index=False,if_exists="append")
+            df.join()
         except Exception as e:
             tb.print_exc()
 # def get_new_file(dir):

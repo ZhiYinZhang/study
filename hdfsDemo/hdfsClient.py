@@ -9,7 +9,7 @@ from hdfs.ext.kerberos import KerberosClient
 class hdfs_opt():
     def __init__(self,is_kerberos):
         self.is_kerberos=is_kerberos
-    def get_hdfs_client(self):
+    def __get_hdfs_client(self):
         # hdfs_host = "http://10.72.59.89:50070"
         # user = "entrobus"
         if self.is_kerberos:
@@ -18,7 +18,7 @@ class hdfs_opt():
             cli = client.InsecureClient(url=hdfs_host, user=user)
         return cli
     def upload(self,hdfs_path,local_path,reties=3):
-        cli=self.get_hdfs_client()
+        cli=self.__get_hdfs_client()
 
         succ=""
         for i in range(reties):
@@ -32,6 +32,12 @@ class hdfs_opt():
            if len(succ) > 0:
                print("success")
                break
+    def download(self,hdfs_path,local_path,overwrite=False):
+        cli=self.__get_hdfs_client()
+        result=cli.download(hdfs_path, local_path,overwrite=overwrite)
+        if local_path in result:
+            print("success")
+
 
 
 def get_hdfs_client(is_kerberos=False):
@@ -45,6 +51,7 @@ def get_hdfs_client(is_kerberos=False):
         cli=KerberosClient(url=hdfs_host)
     else:
         cli = client.InsecureClient(url=hdfs_host,user=user)
+        client.Client
     return cli
 
 
@@ -73,36 +80,34 @@ if __name__=="__main__":
     #         sys.exit()
     # print("asdf")
     # #
+
+
     # start=dt.now()
-    # # cli.write(hdfs_path="./zhangzy/file1.csv",data=file_content,overwrite=True,encoding="utf-8",buffersize=1024*2)
-    # # print(cli.list("./"))
+    # cli.write(hdfs_path="./zhangzy/file1.csv",data=file_content,overwrite=True,encoding="utf-8",buffersize=1024*2)
+    # print(cli.list("./"))
     # end=dt.now()
+    # cli.download()
 
 
-    succ=""
-    for i in range(3):
-       times=i+1
-       print(f"第{times}次")
 
-       try:
-           #成功:succ为hdfs的目标路径
-           tgt="/user/entrobus/tobacco_data_630/comId_city"
-           src="E:\\资料\\project\\烟草\\外部数据\\城市与comId\\comId_city.csv"
-
-           # tgt = "/user/entrobus/zhangzy/dataset"
-           # src = "E:\\test//cust_lng_lat//cust_addr//cust_lng_lat.csv"
-           succ=cli.upload(tgt,src,overwrite=True)
-       except Exception as e:
-            tb.print_exc()
-            if times==3:
-                sys.exit()
-       #成功 退出循环
-       if len(succ)>0:
-           print("success")
-           break
-
+    # succ=""
+    # for i in range(3):
+    #    times=i+1
+    #    print(f"第{times}次")
     #
-
-
-
-
+    #    try:
+    #        #成功:succ为hdfs的目标路径
+    #        tgt="/user/entrobus/zhangzy/dataset/cust_lng_lat.csv"
+    #        src="E:\\test\\cust_lng_lat\\20200316\\cust_lng_lat.csv"
+    #
+    #        # tgt = "/user/entrobus/zhangzy/dataset"
+    #        # src = "E:\\test//cust_lng_lat//cust_addr//cust_lng_lat.csv"
+    #        succ=cli.upload(tgt,src,overwrite=True)
+    #    except Exception as e:
+    #         tb.print_exc()
+    #         if times==3:
+    #             sys.exit()
+    #    #成功 退出循环
+    #    if len(succ)>0:
+    #        print("success")
+    #        break

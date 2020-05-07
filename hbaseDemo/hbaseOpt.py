@@ -67,7 +67,7 @@ def decode(row,family,cols:list,upper_case=False):
 def get(table_name,family,cols:list,upper_case=False,limit=100,row_prefix=None):
     conn = happybase.Connection(host=hbase["host"])
     table = conn.table(table_name)
-    print(table_name, family)
+    print(f"table name:{table_name},family column:{family}")
 
     if upper_case:
         # 转为大写
@@ -82,7 +82,7 @@ def get(table_name,family,cols:list,upper_case=False,limit=100,row_prefix=None):
         fly_col = f"{family}:{col}"
         fly_cols.append(fly_col)
 
-    print(fly_cols)
+    print(f"cols:{fly_cols}")
     rows = table.scan(columns=fly_cols, limit=limit,row_prefix=row_prefix)
 
     return rows
@@ -142,7 +142,7 @@ def upper_case(cols):
     return result
 
 from  random import randint
-hbase={"host":"10.72.59.89","size":10,"table":"member3",
+hbase={"host":"10.18.0.34","size":10,"table":"member3",
        "row":"cust_id",
        "families":["column_A","column_B"],  #本次要写的列族
        "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
@@ -150,26 +150,32 @@ hbase={"host":"10.72.59.89","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    prefix="V530_TOBACCO."
+    prefix="V630_TOBACCO."
     tables=["TEST","test1",
             prefix+"AREA",prefix+"RETAIL",
             prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
             prefix+"DATA_INDEX",prefix+"BLOCK_DATA",
             prefix+"CIGA_PICTURE",prefix+"GEARS_TOSS",
             prefix+"CIGA_GRADE"]
-    hbase["table"]=tables[5]
 
+
+    hbase["table"]=tables[3]
     hbase["families"] = "0"
 
     # hbase["row"]="sale_center_id"
     # hbase["row"] = "cust_id"
 
     # hbase["table"]="V530_TOBACCO.CODE"
+
     conn=happybase.Connection(host=hbase["host"])
-    table=conn.table(hbase["table"])
-    rows=table.scan(columns=["0:CLASSIFY_LEVEL1_CODE"],limit=10)
-    for i in rows:
-       print(i)
+    # table=conn.table(hbase["table"])
+
+    #查询有哪些表
+    tables=conn.tables()
+    for t in tables:
+        print(t.decode("utf-8"))
+
+
 
     # table=conn.table(hbase["table"])
     # table = conn.table("V630_TOBACCO.GEARS_TOSS")
@@ -180,6 +186,9 @@ if __name__=="__main__":
 
     # table.put(row="01111430206",data={"0:COUNTY":"['渌口区']"})
 
+
+
+
     #写数据
 
     # print(str(dt.now()))
@@ -187,15 +196,20 @@ if __name__=="__main__":
     #     for i in range(5,10):
     #         batch.put(row=f"{i}",data={"0:CITY":f"{randint(0,1)}","0:COUNTY":f"Tom{i}","0:COM_ID":f"{i}"})
     # print(str(dt.now()))
-    # table.scan()
+
 
 
     #读数据
-    # cols = ["gauge_week_again"]
-    # rows = get(table_name=hbase["table"], family="0", cols=upper_case(cols), upper_case=False,limit=1000,row_prefix=None)
+    # cols = ["cust_id","city","county"]
+    """
+    rows=[
+          [b"row_key1",{b"cf:col1":b"data",b"cf:col2":b"data"}],
+          [b"row_key2",{b"cf:col1":b"data",b"cf:col2":b"data"}]
+         ]
+    """
+    # rows = get(table_name=hbase["table"], family="0", cols=cols, upper_case=True,limit=1000,row_prefix=None)
     # for row in rows:
     #         print(row[0],row[1])
-            # table.put(row=row[0],data=row[1])
             # print(decode(row,family=hbase["families"],cols=["county"],upper_case=True))
 
 

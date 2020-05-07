@@ -42,13 +42,13 @@ def get_client2():
     return client
 
 
-client=get_client1()
-#打开一个channel并执行命令
-stdin,stdout,stderr=client.exec_command("date>>/home/zhangzy/tobacco_data/ssh.csv")
+client:paramiko.client.SSHClient=get_client1()
 
-
+# cmd="date>>/home/zhangzy/tobacco_data/ssh.csv"
+cmd="bash /home/zhangzy/shell/test.sh"
+stdin,stdout,stderr=client.exec_command(cmd)
+# stdin:paramiko.channel.ChannelStdinFile=stdin
 print(stdout.read().decode("utf-8"))
-
 
 
 #关闭sshClient

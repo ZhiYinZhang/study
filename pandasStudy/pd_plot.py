@@ -17,7 +17,7 @@ df1=pd.DataFrame(np.random.randn(100,3),columns=["a","b","c"])
 
 
 #直接使用plot  得到每列的折线图
-# df1.plot()
+df1.plot()
 # plt.show()
 
 
