@@ -12,11 +12,11 @@ client=KafkaClient("10.18.0.32:9092")
 
 print(client.topics)
 
-topic:Topic=client.topics[b"test"]
+topic:Topic=client.topics[b"rating"]
 
 
 
-file="E:\\test\\ml-25m\\ml-25m\\links.csv"
+# file="E:\\test\\ml-25m\\ml-25m\\links.csv"
 
 
 # with topic.get_producer() as producer:

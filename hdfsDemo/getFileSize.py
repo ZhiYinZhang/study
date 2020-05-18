@@ -16,23 +16,23 @@ tables = cli.list(root_dir)
 
 #目前在用的表
 tables=[
-#  "DB2_DB2INST1_SGP_ITEM_SPW",    #全量
-#  "DB2_DB2INST1_CO_CUST"          #全量
-# ,"DB2_DB2INST1_CRM_CUST"         #全量
-# ,"DB2_DB2INST1_CO_DEBIT_ACC"     #全量
-# ,"DB2_DB2INST1_PLM_ITEM"         #全量
-# ,"DB2_DB2INST1_PLM_BRAND"        #全量
-# ,"DB2_DB2INST1_PLM_BRANDOWNER"   #全量
-# ,"DB2_DB2INST1_PUB_STRU"         #全量
-# ,"DB2_DB2INST1_LDM_CUST"         #全量
-# ,"DB2_DB2INST1_LDM_CUST_DIST"    #全量
-# ,"DB2_ZRHYZM_T_LIC_RLIC_INFO"    #全量
-# ,"DB2_DB2INST1_PUB_ORGAN"        #全量
-# ,"DB2_DB2INST1_PLM_ITEM_COM"     #全量
-"DB2_DB2INST1_CO_CO_01"         #增量
-# ,"DB2_DB2INST1_CO_CO_LINE"       #增量
-# ,"DB2_DB2INST1_CRM_CUST_LOG"     #增量
-# ,"DB2_DB2INST1_SGP_CUST_ITEM_SPW"#增量
+ "DB2_DB2INST1_SGP_ITEM_SPW",    #全量
+ "DB2_DB2INST1_CO_CUST"          #全量
+,"DB2_DB2INST1_CRM_CUST"         #全量
+,"DB2_DB2INST1_CO_DEBIT_ACC"     #全量
+,"DB2_DB2INST1_PLM_ITEM"         #全量
+,"DB2_DB2INST1_PLM_BRAND"        #全量
+,"DB2_DB2INST1_PLM_BRANDOWNER"   #全量
+,"DB2_DB2INST1_PUB_STRU"         #全量
+,"DB2_DB2INST1_LDM_CUST"         #全量
+,"DB2_DB2INST1_LDM_CUST_DIST"    #全量
+,"DB2_ZRHYZM_T_LIC_RLIC_INFO"    #全量
+,"DB2_DB2INST1_PUB_ORGAN"        #全量
+,"DB2_DB2INST1_PLM_ITEM_COM"     #全量
+,"DB2_DB2INST1_CO_CO_01"         #增量
+,"DB2_DB2INST1_CO_CO_LINE"       #增量
+,"DB2_DB2INST1_CRM_CUST_LOG"     #增量
+,"DB2_DB2INST1_SGP_CUST_ITEM_SPW"#增量
 ]
 
 
@@ -49,7 +49,7 @@ for table in tables:
         partitions = cli.list(table_path)
         for part in partitions:
             # print(part)
-            if part>='19000101':
+            if part>='20200401':
                 #分区路径
                 # partition_path = os.path.join(table_path, part)
                 partition_path = "/".join([table_path, part])

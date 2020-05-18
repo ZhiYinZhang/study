@@ -1,7 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # datetime:2018/12/12 9:40
+import math
 
+def split_ranges(total,partition):
+    ranges=[]
+    if total>2*partition:
+        partition_size=math.ceil(total/partition)
+        start=0
+        end=0
+        for i in range(10):
+            start=i*partition_size
+            end=start+(partition_size-1)
+            #最后一个
+            if (i+1)==partition:
+                end=total
+            ranges.append((start,end))
+    else:
+        ranges.append((0,total))
+    return ranges
 def split_integer(total,partition):
     """
     将一个数均分
@@ -75,6 +92,7 @@ def split_range_zip(total_size,partition):
     else:
        l1.append((0,total_size))
     return l1
+
 if __name__=="__main__":
     import time
     start  = time.time()
