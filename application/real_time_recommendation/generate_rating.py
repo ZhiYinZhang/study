@@ -11,6 +11,7 @@ from datetime import datetime as dt
 from datetime import timedelta
 import time
 from application.real_time_recommendation.config import kafka_bootstrap_servers,topic,kafka_checkpoint,combine_data,start_date
+from application.real_time_recommendation.utils import get_spark
 """
 nohup \
 spark2-submit --name generate_rating \
@@ -29,10 +30,7 @@ spark2-submit --name generate_rating \
 将数据按照当前时间写入kafka
 
 """
-spark=SparkSession.builder\
-                  .appName("generate rating")\
-                  .getOrCreate()
-spark.sparkContext.setLogLevel("warn")
+spark=get_spark()
 
 result1=spark.read.parquet(combine_data)
 

@@ -29,6 +29,10 @@ topic:Topic=client.topics[b"rating"]
 
 eao=topic.earliest_available_offsets()
 lao=topic.latest_available_offsets()
+
+print(eao)
+print(lao)
+
 for i in range(3):
     print(eao[i])
     print(lao[i])

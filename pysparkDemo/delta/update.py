@@ -36,4 +36,3 @@ deltaTable=DeltaTable.forPath(spark,path+"test1")
 
 deltaTable.alias("events")
 
-deltaTable.vacuum

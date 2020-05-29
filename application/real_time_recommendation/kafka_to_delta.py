@@ -5,6 +5,7 @@ from pyspark.sql import functions as f
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 from application.real_time_recommendation.config import kafka_bootstrap_servers,topic,delta_checkpoint,delta_path
+from application.real_time_recommendation.utils import get_spark
 """
 读取kafka数据，写入delta 分区表
 """
@@ -22,11 +23,8 @@ spark2-submit --name generate_rating \
 	  kafka_to_delta.py \
 >log/kafka_to_delta.log 2>&1 &
 """
-spark=SparkSession.builder\
-            .appName("kafka to delta")\
-            .getOrCreate()
-spark.sparkContext.setLogLevel("warn")
 
+spark=get_spark()
 
 # 读取kafka数据
 kafka_reader = spark.readStream \

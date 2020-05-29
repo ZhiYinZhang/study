@@ -5,21 +5,24 @@ from pykafka import KafkaClient
 from pykafka.topic import Topic
 from pykafka.protocol import Message
 
-client=KafkaClient("10.18.0.32:9092")
+client=KafkaClient("10.18.0.12:9092")
 
 topic:Topic=client.topics[b"rating"]
 
 partitions=topic.partitions
 
-consumer=topic.get_simple_consumer(consumer_group=b"g1")
+consumer=topic.get_simple_consumer()
 
 #消费者从指定的offset消费
-consumer.reset_offsets(partition_offsets=[(partitions[0],513451),
-                                          (partitions[1],513451),
-                                          (partitions[2],513451)])
+# consumer.reset_offsets(partition_offsets=[(partitions[0],1050000),
+#                                           (partitions[1],1050000),
+#                                           (partitions[2],1050000)])
 for message in consumer:
+    m:Message=message
     pid=message.partition_id
     data=message.value
     offset=message.offset
-    print(f"partition_id:{pid}  offset:{offset}  message:{data}")
-    consumer.commit_offsets()
+    t=m.timestamp
+
+    print(f"partition_id:{pid}  offset:{offset}  message:{data} timestamp:{t}")
+    # consumer.commit_offsets()
