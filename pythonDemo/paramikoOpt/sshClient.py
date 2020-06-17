@@ -41,15 +41,15 @@ def get_client2():
     client.connect(hostname='10.18.0.34', port=22, username='zhangzy', pkey=private)
     return client
 
+if __name__=="__main__":
+    client:paramiko.client.SSHClient=get_client1()
 
-client:paramiko.client.SSHClient=get_client1()
-
-# cmd="date>>/home/zhangzy/tobacco_data/ssh.csv"
-cmd="bash /home/zhangzy/shell/test.sh"
-stdin,stdout,stderr=client.exec_command(cmd)
-# stdin:paramiko.channel.ChannelStdinFile=stdin
-print(stdout.read().decode("utf-8"))
+    # cmd="date>>/home/zhangzy/tobacco_data/ssh.csv"
+    cmd="bash /home/zhangzy/shell/test.sh"
+    stdin,stdout,stderr=client.exec_command(cmd)
+    # stdin:paramiko.channel.ChannelStdinFile=stdin
+    print(stdout.read().decode("utf-8"))
 
 
-#关闭sshClient
-client.close()
+    #关闭sshClient
+    client.close()

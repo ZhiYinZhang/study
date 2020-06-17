@@ -8,7 +8,7 @@ from delta.tables import DeltaTable
 
 def merge(spark, update, tableName, cols, key):
     """
-    将DataFrame和delta表进行merge操作，insert操作要求DataFrame必须包含delta表所有的列
+    将DataFrame和delta表进行merge操作，insert操作要求DataFrame必须包含delta表所有的列(0.5版本)
     当我们使用merge操作更新/插入delta表其中几列时，指定在DataFrame中不存在的列的值为null。
 
     注：DataFrame中要写入delta表的列要和delta表一样

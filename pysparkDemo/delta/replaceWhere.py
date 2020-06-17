@@ -41,3 +41,9 @@ if __name__=="__main__":
     test(5, 10, timestamp, replaceWhere)
 
     display()
+
+    # replaceWhere = "dt=dt and hour=hour"
+    # timestamp = "2020-05-29 11:00:00"
+    # test(5, 10, timestamp, replaceWhere)
+    #
+    # display()

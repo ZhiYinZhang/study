@@ -24,7 +24,10 @@ def write_hbase(rows,hbase):
 def write_hbase1(rows,hbase,cols):
     """
     :param rows:  spark的DataFrame以foreachPartition方法  List[Row]
-    :param hbase: "host":"","table":"","row":"","cf":""
+    :param hbase: {"table":hbase_tableName,"row":row_key,"families":[fly_col1]}
+                   table  hbase中的表
+                   row    DataFrame中为row key的列
+                   families hbase中的列族
     :param cols:   DataFrame的列，直接以这个列名作为hbase的列名，所以要先将DataFrame的列名改成hbase中的列名
     :return:
     """
@@ -34,7 +37,7 @@ def write_hbase1(rows,hbase,cols):
         try:
             with table.batch(batch_size=1000) as batch:
                 for row in rows:
-                    row_key = row[hbase["row"]]  # row key
+                    row_key = str(row[hbase["row"]])  # row key
                     for family in hbase["families"]:  # 列族
                         data = {}
                         for c in cols:  # 列
@@ -142,7 +145,7 @@ def upper_case(cols):
     return result
 
 from  random import randint
-hbase={"host":"10.18.0.34","size":10,"table":"member3",
+hbase={"host":"10.72.59.89","size":10,"table":"member3",
        "row":"cust_id",
        "families":["column_A","column_B"],  #本次要写的列族
        "column_A":["4","5"],"column_B":["1","2"], #要写的列族中的列
@@ -150,7 +153,7 @@ hbase={"host":"10.18.0.34","size":10,"table":"member3",
        }
 
 if __name__=="__main__":
-    prefix="V630_TOBACCO."
+    prefix="V530_TOBACCO."
     tables=["TEST","test1",
             prefix+"AREA",prefix+"RETAIL",
             prefix+"RETAIL_WARNING",prefix+"WARNING_CODE",
@@ -168,13 +171,12 @@ if __name__=="__main__":
     # hbase["table"]="V530_TOBACCO.CODE"
 
     conn=happybase.Connection(host=hbase["host"])
-    # table=conn.table(hbase["table"])
+    table=conn.table(hbase["table"])
 
     #查询有哪些表
-    tables=conn.tables()
-    for t in tables:
-        print(t.decode("utf-8"))
-
+    # tables=conn.tables()
+    # for t in tables:
+    #     print(t.decode("utf-8"))
 
 
     # table=conn.table(hbase["table"])
@@ -221,5 +223,5 @@ if __name__=="__main__":
 
 
     # print(str(dt.now()))
-    # delete_all("test2",["age","name"])
+    # delete_all("V530_.RENT_INFO",[])
     # print(str(dt.now()))

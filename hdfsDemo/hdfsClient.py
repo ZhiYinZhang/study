@@ -90,24 +90,24 @@ if __name__=="__main__":
 
 
 
-    # succ=""
-    # for i in range(3):
-    #    times=i+1
-    #    print(f"第{times}次")
-    #
-    #    try:
-    #        #成功:succ为hdfs的目标路径
-    #        tgt="/user/entrobus/zhangzy/dataset/cust_lng_lat.csv"
-    #        src="E:\\test\\cust_lng_lat\\20200316\\cust_lng_lat.csv"
-    #
-    #        # tgt = "/user/entrobus/zhangzy/dataset"
-    #        # src = "E:\\test//cust_lng_lat//cust_addr//cust_lng_lat.csv"
-    #        succ=cli.upload(tgt,src,overwrite=True)
-    #    except Exception as e:
-    #         tb.print_exc()
-    #         if times==3:
-    #             sys.exit()
-    #    #成功 退出循环
-    #    if len(succ)>0:
-    #        print("success")
-    #        break
+    succ=""
+    for i in range(3):
+       times=i+1
+       print(f"第{times}次")
+
+       try:
+           #成功:succ为hdfs的目标路径
+           tgt="/user/entrobus/external_data/"
+           src="E:/test/tapd/人流-宜出行"
+
+           # tgt = "/user/entrobus/zhangzy/dataset"
+           # src = "E:\\test//cust_lng_lat//cust_addr//cust_lng_lat.csv"
+           succ=cli.upload(tgt,src,overwrite=True)
+       except Exception as e:
+            tb.print_exc()
+            if times==3:
+                sys.exit()
+       #成功 退出循环
+       if len(succ)>0:
+           print("success")
+           break

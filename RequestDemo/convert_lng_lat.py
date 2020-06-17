@@ -91,9 +91,9 @@ if __name__=="__main__":
     key = "e5c7aff5f51f96e8ef3d90aea5148cc2"
 
     # cust_id,city,busi_addr,com_id
-    src_path = "E:/test/cust_lng_lat/20200429/cust_addr.csv"
+    src_path = "E:/test/cust_lng_lat/20200617/cust_addr.csv"
     # cust_id,city,busi_addr,com_id,lng,lat
-    result_path="e:/test/cust_lng_lat/20200429/cust_lng_lat.csv"
+    result_path="e:/test/cust_lng_lat/20200617/cust_lng_lat.csv"
 
     print(str(dt.now()))
     convert_lng_lat(src_path,result_path,index={"city":0,"addr":3},key=key)
