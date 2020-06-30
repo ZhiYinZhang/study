@@ -8,7 +8,7 @@ from pykafka.protocol import Message,OffsetPartitionResponse
 
 client=KafkaClient("10.18.0.32:9092")
 
-topic:Topic=client.topics[b"test"]
+topic:Topic=client.topics[b"rating"]
 
 
 
@@ -19,14 +19,14 @@ for i in range(len(partitions)):
     partition:Partition=partitions[i]
     # print(partition.topic)
     # print(partition.earliest_available_offset())
-    # print(partition.latest_available_offset())
-    print(partition.id)
+    print(partition.latest_available_offset())
+    # print(partition.id)
     #pykafka.broker.Broker:<pykafka.broker.Broker at 0x37e1518 (host=b'entrobus32', port=9092, id=125)>
-    print(partition.leader)
+    # print(partition.leader)
     #[pykafka.broker.Broker]
-    print(partition.isr)
+    # print(partition.isr)
     #[pykafka.broker.Broker]
-    print(partition.replicas)
+    # print(partition.replicas)
 
 
 

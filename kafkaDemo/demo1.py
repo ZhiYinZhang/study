@@ -14,9 +14,9 @@ partitions=topic.partitions
 consumer=topic.get_simple_consumer()
 
 #消费者从指定的offset消费
-# consumer.reset_offsets(partition_offsets=[(partitions[0],1050000),
-#                                           (partitions[1],1050000),
-#                                           (partitions[2],1050000)])
+consumer.reset_offsets(partition_offsets=[(partitions[0],6157508),
+                                          (partitions[1],6157508),
+                                          (partitions[2],6157508)])
 for message in consumer:
     m:Message=message
     pid=message.partition_id
